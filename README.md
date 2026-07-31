@@ -1,4 +1,4 @@
-# lazy-tools
+# lazytools
 
 
 

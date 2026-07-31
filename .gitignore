@@ -1,0 +1,8 @@
+docs/.brainstorms
+docs/.plans
+
+/target
+**/*.rs.bk
+/release
+.DS_Store
+/.idea/
