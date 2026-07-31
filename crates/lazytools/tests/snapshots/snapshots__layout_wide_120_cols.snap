@@ -1,6 +1,6 @@
 ---
 source: crates/lazytools/tests/snapshots.rs
-assertion_line: 41
+assertion_line: 48
 expression: "render(120, 24)"
 ---
 "┌ Tools ───────────────┐┌ Hash Text ───────────────────────────────────────────────────────────────────────────────────┐"
@@ -26,4 +26,4 @@ expression: "render(120, 24)"
 "│                      ││                                                                                              │"
 "│                      ││                                                                                              │"
 "└──────────────────────┘└──────────────────────────────────────────────────────────────────────────────────────────────┘"
-"[j/k] chọn tool [Tab] đổi vùng [q] thoát                                                                                "
+"[j/k] chọn tool [Tab] đổi vùng [^P] palette [?] trợ giúp [q] thoát                                                      "

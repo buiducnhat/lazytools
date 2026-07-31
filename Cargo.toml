@@ -23,6 +23,11 @@ serde_json = "1.0"
 
 ratatui = "0.30"
 bitflags = "2"
+nucleo = "0.5"
+# default-features tắt: bỏ `image-data` (kéo theo `image`/`tiff`) — chỉ copy text.
+arboard = { version = "3.6", default-features = false }
+toml = "1.1"
+serde = { version = "1.0", features = ["derive"] }
 unicode-segmentation = "1"
 unicode-width = "0.2"
 

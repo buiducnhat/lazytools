@@ -3,6 +3,7 @@
 
 pub mod cmdbar;
 pub mod field;
+pub mod palette;
 pub mod sidebar;
 pub mod tool_form;
 

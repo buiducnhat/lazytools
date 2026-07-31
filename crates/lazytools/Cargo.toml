@@ -14,6 +14,10 @@ ratatui.workspace = true
 bitflags.workspace = true
 unicode-segmentation.workspace = true
 unicode-width.workspace = true
+nucleo.workspace = true
+arboard.workspace = true
+toml.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true

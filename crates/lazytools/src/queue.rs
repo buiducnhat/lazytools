@@ -15,6 +15,10 @@ pub enum InternalEvent {
     InputChanged,
     /// `RunMode::OnDemand` được kích bằng phím.
     RunRequested,
+    OpenPalette,
+    ClosePalette,
+    ShowHelp,
+    CopyToClipboard(String),
     ShowMsg(String),
     ShowError(ToolError),
     Quit,

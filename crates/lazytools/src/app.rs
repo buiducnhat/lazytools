@@ -7,12 +7,14 @@ use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::widgets::Block;
 
+use crate::clipboard;
 use crate::components::cmdbar::CommandBar;
+use crate::components::palette::Palette;
 use crate::components::sidebar::Sidebar;
 use crate::components::tool_form::ToolFormComponent;
 use crate::components::{CommandInfo, Component, DrawableComponent, command_pump, event_pump};
 use crate::keys::{KeyConfig, key_match};
-use crate::popups::MsgPopup;
+use crate::popups::{HelpPopup, MsgPopup};
 use crate::queue::{InternalEvent, NeedsUpdate, Queue};
 use crate::ui::{SharedTheme, Theme};
 
@@ -35,18 +37,37 @@ pub struct App {
     key_config: KeyConfig,
     sidebar: Sidebar,
     tool_form: ToolFormComponent,
+    palette: Palette,
     cmdbar: CommandBar,
     msg_popup: MsgPopup,
+    help_popup: HelpPopup,
     focus: Focus,
     should_quit: bool,
     needs_redraw: bool,
+    /// Thông báo thoáng qua ở cmdbar (ví dụ "đã copy").
+    flash: Option<String>,
 }
 
 impl App {
+    /// Dùng phím mặc định — cho test và cho trường hợp không có HOME.
     pub fn new(registry: Registry) -> Self {
+        Self::with_key_config(registry, KeyConfig::default(), None)
+    }
+
+    /// Đọc `~/.config/lazytools/keys.toml`. Config hỏng **không** chặn khởi
+    /// động: app vẫn mở, kèm popup nói rõ vấn đề để người dùng vào sửa được.
+    pub fn from_user_config(registry: Registry) -> Self {
+        let (key_config, issue) = KeyConfig::load();
+        Self::with_key_config(registry, key_config, issue.map(|i| i.message()))
+    }
+
+    fn with_key_config(
+        registry: Registry,
+        key_config: KeyConfig,
+        config_issue: Option<String>,
+    ) -> Self {
         let queue = Queue::default();
         let theme: SharedTheme = Rc::new(Theme::default());
-        let key_config = KeyConfig::default();
 
         let sidebar = Sidebar::new(&registry, queue.clone(), theme.clone(), key_config);
         let mut tool_form = ToolFormComponent::new(queue.clone(), theme.clone(), key_config);
@@ -56,18 +77,27 @@ impl App {
             tool_form.set_tool(tool.spec());
         }
 
+        let palette = Palette::new(&registry, queue.clone(), theme.clone(), key_config);
+        let mut msg_popup = MsgPopup::new(theme.clone(), key_config);
+        if let Some(msg) = config_issue {
+            msg_popup.show_error(msg);
+        }
+
         Self {
             registry,
             queue,
             key_config,
             sidebar,
             tool_form,
+            palette,
             cmdbar: CommandBar::new(theme.clone()),
-            msg_popup: MsgPopup::new(theme.clone(), key_config),
+            msg_popup,
+            help_popup: HelpPopup::new(theme.clone(), key_config),
             theme,
             focus: Focus::Sidebar,
             should_quit: false,
             needs_redraw: true,
+            flash: None,
         }
     }
 
@@ -109,9 +139,17 @@ impl App {
         self.draw_workspace(f, cols[1])?;
 
         self.refresh_commands();
-        self.cmdbar.draw(f, cmdbar_area)?;
+        match &self.flash {
+            Some(msg) => f.render_widget(
+                ratatui::widgets::Paragraph::new(msg.as_str()).style(self.theme.title(true)),
+                cmdbar_area,
+            ),
+            None => self.cmdbar.draw(f, cmdbar_area)?,
+        }
 
-        // Popup vẽ sau cùng để nằm trên mọi thứ.
+        // Overlay vẽ sau cùng để nằm trên mọi thứ.
+        self.palette.draw(f, area)?;
+        self.help_popup.draw(f, area)?;
         self.msg_popup.draw(f, area)?;
         Ok(())
     }
@@ -136,12 +174,29 @@ impl App {
         self.tool_form.draw(f, inner)
     }
 
+    fn components(&self) -> Vec<&dyn Component> {
+        vec![
+            &self.msg_popup,
+            &self.help_popup,
+            &self.palette,
+            &self.sidebar,
+            &self.tool_form,
+        ]
+    }
+
     fn refresh_commands(&mut self) {
         let mut cmds = Vec::new();
-        let components: Vec<&dyn Component> = vec![&self.msg_popup, &self.sidebar, &self.tool_form];
-        command_pump(&mut cmds, false, &components);
+        command_pump(&mut cmds, false, &self.components());
         cmds.extend(self.app_commands());
         self.cmdbar.set_cmds(cmds);
+    }
+
+    /// Toàn bộ lệnh, kể cả của component đang ẩn — nội dung cho help popup.
+    fn all_commands(&self) -> Vec<CommandInfo> {
+        let mut cmds = Vec::new();
+        command_pump(&mut cmds, true, &self.components());
+        cmds.extend(self.app_commands());
+        cmds
     }
 
     /// Lệnh cấp app — luôn lấy chuỗi phím từ `KeyConfig`.
@@ -155,24 +210,44 @@ impl App {
                     .order(50),
             );
         }
+        cmds.push(CommandInfo::new(self.key_config.hint(keys.palette), "palette", "App").order(55));
+        if self.focus == Focus::Workspace {
+            cmds.push(CommandInfo::new(self.key_config.hint(keys.copy), "copy", "App").order(58));
+        }
+        cmds.push(CommandInfo::new(self.key_config.hint(keys.help), "trợ giúp", "App").order(60));
         cmds.push(CommandInfo::new(self.key_config.hint(keys.quit), "thoát", "App").order(99));
         cmds
     }
 
     pub fn event(&mut self, ev: &Event) -> Result<()> {
         self.needs_redraw = true;
+        // Thông báo thoáng qua biến mất ở thao tác kế tiếp.
+        self.flash = None;
 
-        // Thứ tự định tuyến: popups → pane đang focus. Palette xen vào giữa ở P3.
-        // Sidebar và tool_form đều tự trả `NotConsumed` khi không được focus.
-        let mut components: Vec<&mut dyn Component> =
-            vec![&mut self.msg_popup, &mut self.sidebar, &mut self.tool_form];
+        // Thứ tự định tuyến: popups → palette → pane đang focus.
+        // Mọi component tự trả `NotConsumed` khi không được focus/hiển thị.
+        let mut components: Vec<&mut dyn Component> = vec![
+            &mut self.msg_popup,
+            &mut self.help_popup,
+            &mut self.palette,
+            &mut self.sidebar,
+            &mut self.tool_form,
+        ];
         if event_pump(ev, &mut components)?.is_consumed() {
             return Ok(());
         }
 
         if let Event::Key(k) = ev {
             let keys = &self.key_config.keys;
-            if key_match(k, keys.quit) {
+            if key_match(k, keys.palette) {
+                self.queue.push(InternalEvent::OpenPalette);
+            } else if key_match(k, keys.help) {
+                self.queue.push(InternalEvent::ShowHelp);
+            } else if key_match(k, keys.copy) && self.focus == Focus::Workspace {
+                if let Some(text) = self.tool_form.focused_value() {
+                    self.queue.push(InternalEvent::CopyToClipboard(text));
+                }
+            } else if key_match(k, keys.quit) {
                 self.queue.push(InternalEvent::Quit);
             } else if key_match(k, keys.focus_next) || key_match(k, keys.focus_prev) {
                 self.toggle_focus();
@@ -216,6 +291,29 @@ impl App {
                 }
                 InternalEvent::ShowError(e) => {
                     self.msg_popup.show_error(e.to_string());
+                    flags |= NeedsUpdate::ALL;
+                }
+                InternalEvent::OpenPalette => {
+                    self.palette.show()?;
+                    flags |= NeedsUpdate::ALL;
+                }
+                InternalEvent::ClosePalette => {
+                    self.palette.hide();
+                    flags |= NeedsUpdate::ALL;
+                }
+                InternalEvent::ShowHelp => {
+                    // Nội dung sinh từ `commands()` ngay lúc mở, không phải danh sách cứng.
+                    let cmds = self.all_commands();
+                    self.help_popup.set_cmds(cmds);
+                    self.help_popup.show()?;
+                    flags |= NeedsUpdate::ALL;
+                }
+                InternalEvent::CopyToClipboard(text) => {
+                    // Thất bại phải nói rõ lý do, không panic và không im lặng.
+                    match clipboard::copy(&text) {
+                        Ok(()) => self.flash = Some("đã copy".to_string()),
+                        Err(e) => self.msg_popup.show_error(e),
+                    }
                     flags |= NeedsUpdate::ALL;
                 }
                 InternalEvent::Quit => self.should_quit = true,

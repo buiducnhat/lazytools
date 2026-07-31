@@ -1,6 +1,6 @@
 ---
 source: crates/lazytools/tests/snapshots.rs
-assertion_line: 82
+assertion_line: 89
 expression: screen
 ---
 "┌ Tools ───────────────┐┌ Hash Text ─────────────────────────────────────────────────────┐"
@@ -28,4 +28,4 @@ expression: screen
 "│                      ││                                                                │"
 "│                      ││                                                                │"
 "└──────────────────────┘└────────────────────────────────────────────────────────────────┘"
-"[Tab] field kế [q] thoát                                                                  "
+"[Tab] field kế [^P] palette [y] copy [?] trợ giúp [q] thoát                               "

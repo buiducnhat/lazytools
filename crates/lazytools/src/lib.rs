@@ -3,6 +3,7 @@
 
 pub mod app;
 pub mod cli;
+pub mod clipboard;
 pub mod components;
 pub mod keys;
 pub mod popups;

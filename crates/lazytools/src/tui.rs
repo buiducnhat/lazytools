@@ -14,21 +14,29 @@ use crate::app::App;
 /// Phase 2B kích hoạt được mà không cần người dùng bấm thêm phím.
 const TICK: Duration = Duration::from_millis(16);
 
+/// Chạy TUI với phím mặc định.
 pub fn run(registry: Registry) -> Result<()> {
+    run_with(App::new(registry))
+}
+
+/// Chạy TUI với phím đọc từ `~/.config/lazytools/keys.toml`.
+pub fn run_with_user_config(registry: Registry) -> Result<()> {
+    run_with(App::from_user_config(registry))
+}
+
+fn run_with(app: App) -> Result<()> {
     // `ratatui::init()` đã tự cài panic hook khôi phục terminal.
     let mut terminal = ratatui::init();
     execute!(stdout(), EnableBracketedPaste)?;
 
-    let result = run_loop(&mut terminal, registry);
+    let result = run_loop(&mut terminal, app);
 
     let _ = execute!(stdout(), DisableBracketedPaste);
     ratatui::restore();
     result
 }
 
-fn run_loop(terminal: &mut ratatui::DefaultTerminal, registry: Registry) -> Result<()> {
-    let mut app = App::new(registry);
-
+fn run_loop(terminal: &mut ratatui::DefaultTerminal, mut app: App) -> Result<()> {
     loop {
         if app.needs_redraw() {
             let mut draw_err = None;

@@ -1,6 +1,10 @@
+pub mod filepath;
+pub mod number;
+pub mod secret;
 pub mod select;
 pub mod text;
 pub mod textarea;
+pub mod toggle;
 
 use anyhow::Result;
 use lazytools_core::spec::{Field, FieldKind};
@@ -28,16 +32,22 @@ pub trait FieldWidget {
     fn is_readonly(&self) -> bool;
 }
 
-/// Dựng widget từ một `Field` của spec. Đây là chỗ duy nhất ánh xạ
-/// `FieldKind` → widget; các `FieldKind` còn lại được nối ở Phase 03.
+/// Dựng widget từ một `Field` của spec. Đây là **chỗ duy nhất** ánh xạ
+/// `FieldKind` → widget; `match` không có nhánh `_` nên thêm một `FieldKind`
+/// mới sẽ làm compiler bắt lỗi ngay tại đây thay vì rơi vào fallback im lặng.
 pub fn build(field: &Field, theme: SharedTheme, readonly: bool) -> Box<dyn FieldWidget> {
     match &field.kind {
-        FieldKind::Select { options } => Box::new(select::SelectWidget::new(field, options, theme)),
         FieldKind::Text { multiline, .. } => {
             Box::new(text::TextWidget::new(field, *multiline, readonly, theme))
         }
-        // Secret / Number / Toggle / FilePath có widget riêng ở Phase 03;
-        // tới lúc đó chúng vẫn hiện dạng text một dòng thay vì biến mất khỏi form.
-        _ => Box::new(text::TextWidget::new(field, false, readonly, theme)),
+        FieldKind::Select { options } => Box::new(select::SelectWidget::new(field, options, theme)),
+        FieldKind::Secret => Box::new(secret::SecretWidget::new(field, theme)),
+        FieldKind::Number { min, max } => {
+            Box::new(number::NumberWidget::new(field, *min, *max, theme))
+        }
+        FieldKind::Toggle => Box::new(toggle::ToggleWidget::new(field, theme)),
+        FieldKind::FilePath { must_exist } => {
+            Box::new(filepath::FilePathWidget::new(field, *must_exist, theme))
+        }
     }
 }

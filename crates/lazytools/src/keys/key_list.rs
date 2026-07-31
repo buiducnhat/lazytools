@@ -24,6 +24,9 @@ pub struct KeysList {
     pub move_left: KeyEvent,
     pub move_right: KeyEvent,
     pub confirm: KeyEvent,
+    pub palette: KeyEvent,
+    pub help: KeyEvent,
+    pub copy: KeyEvent,
 
     // Soạn thảo trong TextArea.
     pub backspace: KeyEvent,
@@ -48,6 +51,9 @@ impl Default for KeysList {
             move_left: key(KeyCode::Left),
             move_right: key(KeyCode::Right),
             confirm: key(KeyCode::Enter),
+            palette: ctrl(KeyCode::Char('p')),
+            help: key(KeyCode::Char('?')),
+            copy: key(KeyCode::Char('y')),
 
             backspace: key(KeyCode::Backspace),
             delete: key(KeyCode::Delete),
