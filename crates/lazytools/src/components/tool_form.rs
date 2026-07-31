@@ -81,8 +81,8 @@ impl ToolFormComponent {
         self.focus = 0;
         self.mode = spec.mode;
         self.error = None;
-        // Run once immediately so the output isn't empty right when the tool opens.
-        self.run_at = Some(Instant::now());
+        self.run_at = None;
+        self.autorun();
     }
 
     pub fn tool_id(&self) -> Option<&'static str> {
@@ -109,6 +109,15 @@ impl ToolFormComponent {
 
     fn is_downgraded(&self) -> bool {
         self.mode == RunMode::Live && self.effective_mode() == RunMode::OnDemand
+    }
+
+    /// Runs the tool right away, but **only** if it's `Live`. `OnDemand` tools stay put:
+    /// bcrypt at cost 12 costs ~200ms, so auto-running it on open would freeze the UI to
+    /// hash an empty password nobody asked for. That's the whole reason `OnDemand` exists.
+    fn autorun(&mut self) {
+        if self.effective_mode() == RunMode::Live {
+            self.run_at = Some(Instant::now());
+        }
     }
 
     pub fn mark_dirty(&mut self) {
@@ -178,8 +187,7 @@ impl ToolFormComponent {
     pub fn set_primary_input(&mut self, text: &str) {
         if let Some(w) = self.widgets.first_mut() {
             w.set_value(&Value::Text(text.to_string()));
-            self.mark_dirty();
-            self.request_run_now();
+            self.autorun();
         }
     }
 }
@@ -212,11 +220,18 @@ impl DrawableComponent for ToolFormComponent {
             y += area.height;
         }
 
-        // Badge shown when large input makes the tool auto-downgrade to run-on-demand.
-        if self.is_downgraded() && y < bottom {
+        // Badge shown whenever the tool won't run on its own — either it's natively
+        // `OnDemand`, or large input auto-downgraded it. Without it, an `OnDemand` tool
+        // just shows an empty output with no clue that a keypress is what's missing.
+        if self.effective_mode() == RunMode::OnDemand && y < bottom {
+            let why = if self.is_downgraded() {
+                "large input — "
+            } else {
+                ""
+            };
             f.render_widget(
                 Paragraph::new(Line::from(format!(
-                    "large input — press {} to run",
+                    "{why}press {} to run",
                     self.key_config.hint(self.key_config.keys.confirm)
                 )))
                 .style(self.theme.dim()),

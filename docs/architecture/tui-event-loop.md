@@ -70,8 +70,15 @@ from "the app decided what to do about it" — e.g. `Sidebar` pushes
 what makes the input-changed debounce work: `App::tick()` is called every loop
 iteration regardless of whether a key was pressed, so a `Live`-mode tool
 reruns automatically ~80ms after the user stops typing, with no extra keypress
-needed. Input larger than 256KB downgrades a `Live` tool to run-on-demand (a
-badge prompts pressing Enter) so pasting a large file can't hang the UI.
+needed. Input larger than 256KB downgrades a `Live` tool to run-on-demand so
+pasting a large file can't hang the UI.
+
+An `OnDemand` tool never runs by itself — not on a keystroke, and not when the
+tool is opened or a file is loaded into it. Only the confirm key runs it. That
+matters on open: auto-running `bcrypt` there would block the UI thread for
+~200ms hashing an empty password before the user had typed anything. Whenever a
+tool is effectively on-demand (natively, or downgraded by large input), a badge
+under the fields prompts pressing Enter, so an empty output never looks broken.
 
 On Windows, crossterm reports both key-press and key-release events; only
 `KeyEventKind::Press` is handled, to avoid double-processing every keystroke.

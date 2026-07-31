@@ -129,6 +129,57 @@ fn large_input_downgrades_to_on_demand() {
     );
 }
 
+/// Opening a `RunMode::OnDemand` tool must **not** run it. Bcrypt at the default cost 12
+/// takes ~200ms on the UI thread, so auto-running it on open froze the TUI just to hash
+/// an empty password. It stays idle until the run key is pressed.
+#[test]
+fn opening_an_on_demand_tool_does_not_run_it() {
+    let mut terminal = terminal(90, 30);
+    let mut app = App::new(Registry::new());
+
+    app.event(&ctrl(KeyCode::Char('p'))).expect("ctrl+p");
+    app.process_queue().expect("queue");
+    for c in "bcrypt".chars() {
+        app.event(&key(KeyCode::Char(c))).expect("type");
+    }
+    app.process_queue().expect("queue");
+    app.event(&key(KeyCode::Enter)).expect("open tool");
+    app.process_queue().expect("queue");
+
+    // Well past the debounce deadline: a `Live` tool would have run by now.
+    std::thread::sleep(Duration::from_millis(150));
+    let started = std::time::Instant::now();
+    app.tick();
+    let elapsed = started.elapsed();
+
+    let screen = draw(&mut terminal, &mut app);
+    assert!(
+        elapsed < Duration::from_millis(50),
+        "tick() must not hash on open — it took {elapsed:?}:\n{screen}"
+    );
+    assert!(
+        !screen.contains("$2"),
+        "no hash may appear before the run key is pressed:\n{screen}"
+    );
+    assert!(
+        screen.contains("press") && screen.contains("to run"),
+        "the empty output must be explained by a run hint:\n{screen}"
+    );
+
+    // Focus the form, then Enter runs it for real.
+    app.event(&key(KeyCode::Tab)).expect("tab");
+    app.process_queue().expect("queue");
+    app.event(&key(KeyCode::Enter)).expect("enter");
+    app.process_queue().expect("queue");
+    app.tick();
+
+    let screen = draw(&mut terminal, &mut app);
+    assert!(
+        screen.contains("$2"),
+        "pressing the run key must produce a bcrypt hash:\n{screen}"
+    );
+}
+
 /// Palette opens with `Ctrl+P`; typing `md5` must bring Hash Text to the top.
 #[test]
 fn palette_matches_on_keywords() {
