@@ -2,7 +2,9 @@
 //! `DrawableComponent`; mọi thứ nhận phím và tự khai báo lệnh là `Component`.
 
 pub mod cmdbar;
+pub mod field;
 pub mod sidebar;
+pub mod tool_form;
 
 use anyhow::Result;
 use ratatui::Frame;

@@ -52,6 +52,7 @@ fn run_loop(terminal: &mut ratatui::DefaultTerminal, registry: Registry) -> Resu
         }
 
         app.process_queue()?;
+        app.tick();
 
         if app.should_quit() {
             return Ok(());

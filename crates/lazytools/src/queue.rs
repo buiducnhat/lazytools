@@ -11,7 +11,10 @@ use lazytools_core::ToolError;
 #[derive(Debug)]
 pub enum InternalEvent {
     SelectTool(&'static str),
-    /// Được đẩy từ Phase 2B trở đi, khi tool chạy và có gì cần báo cho người dùng.
+    /// Một input đổi giá trị → hẹn giờ chạy lại tool (debounce).
+    InputChanged,
+    /// `RunMode::OnDemand` được kích bằng phím.
+    RunRequested,
     ShowMsg(String),
     ShowError(ToolError),
     Quit,
