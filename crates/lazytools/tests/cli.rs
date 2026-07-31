@@ -74,3 +74,164 @@ fn help_lists_subcommands_from_registry() {
         "--help phải liệt kê `hash`: {stdout}"
     );
 }
+
+// --- Mỗi tool thêm ở P4 có ít nhất một ca, tập trung vào luồng pipe. ---
+
+#[test]
+fn base64_encode_from_stdin() {
+    lazytools()
+        .arg("base64")
+        .write_stdin("hello")
+        .assert()
+        .success()
+        .stdout("aGVsbG8=");
+}
+
+#[test]
+fn base64_decode() {
+    lazytools()
+        .args(["base64", "--direction", "decode"])
+        .write_stdin("aGVsbG8=")
+        .assert()
+        .success()
+        .stdout("hello");
+}
+
+#[test]
+fn hex_encode() {
+    lazytools()
+        .arg("hex")
+        .write_stdin("hello")
+        .assert()
+        .success()
+        .stdout("68656c6c6f");
+}
+
+/// Nhánh `InvalidInput` → exit **1** của tầng tool, hoãn từ P1 vì lúc đó chưa
+/// có ca nào tới được `run()` (clap chặn hết ở tầng `Select`).
+#[test]
+fn tool_level_invalid_input_exits_1_and_names_the_field() {
+    let out = lazytools()
+        .args(["hex", "--direction", "decode", "zzz"])
+        .assert()
+        .code(1)
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.starts_with("error: text:"),
+        "positional phải in `text:` chứ không phải `--text:`: {stderr}"
+    );
+}
+
+#[test]
+fn url_encode() {
+    lazytools()
+        .arg("url")
+        .write_stdin("hello world")
+        .assert()
+        .success()
+        .stdout("hello%20world");
+}
+
+#[test]
+fn hmac_sha256_with_key() {
+    lazytools()
+        .args(["hmac", "--algo", "sha256", "--key", "key"])
+        .write_stdin("The quick brown fox jumps over the lazy dog")
+        .assert()
+        .success()
+        .stdout("f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8");
+}
+
+#[test]
+fn bcrypt_hash_then_verify() {
+    let out = lazytools()
+        .args(["bcrypt", "--cost", "4", "hunter2"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let hash = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(hash.starts_with("$2"), "phải là chuỗi bcrypt: {hash}");
+
+    lazytools()
+        .args(["bcrypt", "--mode", "verify", "--hash", &hash, "hunter2"])
+        .assert()
+        .success()
+        .stdout("true");
+}
+
+#[test]
+fn json_format_minify() {
+    lazytools()
+        .args(["json-format", "--mode", "minify"])
+        .write_stdin("{ \"a\" : 1 }")
+        .assert()
+        .success()
+        .stdout(r#"{"a":1}"#);
+}
+
+/// Khóa phải giữ **đúng thứ tự người dùng viết**, không bị sắp lại theo bảng chữ cái.
+#[test]
+fn json_format_preserves_key_order() {
+    lazytools()
+        .args(["json-format", "--mode", "minify"])
+        .write_stdin(r#"{"zebra":1,"apple":2}"#)
+        .assert()
+        .success()
+        .stdout(r#"{"zebra":1,"apple":2}"#);
+}
+
+#[test]
+fn data_format_json_to_yaml() {
+    lazytools()
+        .args(["data-format", "--from", "json", "--to", "yaml"])
+        .write_stdin(r#"{"a":1}"#)
+        .assert()
+        .success()
+        .stdout("a: 1\n");
+}
+
+/// Giới hạn thật của TOML phải thành lỗi rõ ràng, không phải output sai âm thầm.
+#[test]
+fn data_format_reports_toml_limits() {
+    let out = lazytools()
+        .args(["data-format", "--from", "json", "--to", "toml"])
+        .write_stdin("[1,2]")
+        .assert()
+        .code(1)
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--to:"),
+        "lỗi trên option phải in kèm `--to`: {stderr}"
+    );
+}
+
+#[test]
+fn help_lists_all_eight_tools() {
+    let out = lazytools()
+        .arg("--help")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    for name in [
+        "hash",
+        "hmac",
+        "bcrypt",
+        "base64",
+        "url",
+        "hex",
+        "json-format",
+        "data-format",
+    ] {
+        assert!(stdout.contains(name), "--help thiếu `{name}`:\n{stdout}");
+    }
+}
