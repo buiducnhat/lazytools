@@ -14,8 +14,8 @@ use crate::components::EventState;
 use crate::keys::{KeyConfig, key_match, typed_char};
 use crate::ui::SharedTheme;
 
-/// Ô nhập đường dẫn. P3 chỉ nhập tay + cảnh báo khi `must_exist` mà file không
-/// có; nút mở file picker được nối ở Phase 05.
+/// Ô nhập đường dẫn: nhập tay, hoặc mở file picker bằng phím `open_file`.
+/// Cảnh báo tại chỗ nếu `must_exist` mà file chưa có.
 pub struct FilePathWidget {
     key: &'static str,
     label: &'static str,
@@ -111,6 +111,10 @@ impl FieldWidget for FilePathWidget {
         };
         let b = &keys.keys;
 
+        // Nhường phím mở picker lên cấp app thay vì tự nuốt.
+        if key_match(k, b.open_file) {
+            return Ok(EventState::NotConsumed);
+        }
         if key_match(k, b.backspace) {
             self.area.backspace();
         } else if key_match(k, b.delete) {

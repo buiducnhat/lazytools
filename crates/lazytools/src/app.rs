@@ -14,7 +14,7 @@ use crate::components::sidebar::Sidebar;
 use crate::components::tool_form::ToolFormComponent;
 use crate::components::{CommandInfo, Component, DrawableComponent, command_pump, event_pump};
 use crate::keys::{KeyConfig, key_match};
-use crate::popups::{HelpPopup, MsgPopup};
+use crate::popups::{FileOpenPopup, FileSavePopup, HelpPopup, MsgPopup};
 use crate::queue::{InternalEvent, NeedsUpdate, Queue};
 use crate::ui::{SharedTheme, Theme};
 
@@ -41,6 +41,8 @@ pub struct App {
     cmdbar: CommandBar,
     msg_popup: MsgPopup,
     help_popup: HelpPopup,
+    file_open: FileOpenPopup,
+    file_save: FileSavePopup,
     focus: Focus,
     should_quit: bool,
     needs_redraw: bool,
@@ -83,6 +85,9 @@ impl App {
             msg_popup.show_error(msg);
         }
 
+        let file_open = FileOpenPopup::new(queue.clone(), theme.clone(), key_config);
+        let file_save = FileSavePopup::new(queue.clone(), theme.clone(), key_config);
+
         Self {
             registry,
             queue,
@@ -93,6 +98,8 @@ impl App {
             cmdbar: CommandBar::new(theme.clone()),
             msg_popup,
             help_popup: HelpPopup::new(theme.clone(), key_config),
+            file_open,
+            file_save,
             theme,
             focus: Focus::Sidebar,
             should_quit: false,
@@ -150,6 +157,8 @@ impl App {
         // Overlay vẽ sau cùng để nằm trên mọi thứ.
         self.palette.draw(f, area)?;
         self.help_popup.draw(f, area)?;
+        self.file_open.draw(f, area)?;
+        self.file_save.draw(f, area)?;
         self.msg_popup.draw(f, area)?;
         Ok(())
     }
@@ -178,6 +187,8 @@ impl App {
         vec![
             &self.msg_popup,
             &self.help_popup,
+            &self.file_open,
+            &self.file_save,
             &self.palette,
             &self.sidebar,
             &self.tool_form,
@@ -214,6 +225,14 @@ impl App {
         if self.focus == Focus::Workspace {
             cmds.push(CommandInfo::new(self.key_config.hint(keys.copy), "copy", "App").order(58));
         }
+        cmds.push(
+            CommandInfo::new(self.key_config.hint(keys.open_file), "mở file", "App").order(56),
+        );
+        if self.focus == Focus::Workspace {
+            cmds.push(
+                CommandInfo::new(self.key_config.hint(keys.save_file), "lưu file", "App").order(57),
+            );
+        }
         cmds.push(CommandInfo::new(self.key_config.hint(keys.help), "trợ giúp", "App").order(60));
         cmds.push(CommandInfo::new(self.key_config.hint(keys.quit), "thoát", "App").order(99));
         cmds
@@ -229,6 +248,8 @@ impl App {
         let mut components: Vec<&mut dyn Component> = vec![
             &mut self.msg_popup,
             &mut self.help_popup,
+            &mut self.file_open,
+            &mut self.file_save,
             &mut self.palette,
             &mut self.sidebar,
             &mut self.tool_form,
@@ -246,6 +267,12 @@ impl App {
             } else if key_match(k, keys.copy) && self.focus == Focus::Workspace {
                 if let Some(text) = self.tool_form.focused_value() {
                     self.queue.push(InternalEvent::CopyToClipboard(text));
+                }
+            } else if key_match(k, keys.open_file) {
+                self.file_open.show()?;
+            } else if key_match(k, keys.save_file) {
+                if let Some(text) = self.tool_form.focused_value() {
+                    self.queue.push(InternalEvent::SaveOutput(text));
                 }
             } else if key_match(k, keys.quit) {
                 self.queue.push(InternalEvent::Quit);
@@ -316,10 +343,36 @@ impl App {
                     }
                     flags |= NeedsUpdate::ALL;
                 }
+                InternalEvent::OpenFile(path) => {
+                    self.open_file(&path);
+                    flags |= NeedsUpdate::ALL;
+                }
+                InternalEvent::SaveOutput(text) => {
+                    self.file_save.open_with(text);
+                    flags |= NeedsUpdate::ALL;
+                }
                 InternalEvent::Quit => self.should_quit = true,
             }
         }
         Ok(flags)
+    }
+
+    /// Nạp nội dung file vào input chính của tool đang mở.
+    ///
+    /// Đọc file là việc của **tầng UI** — tool vẫn chỉ nhận/trả text thuần, nhờ
+    /// vậy `run()` còn test được mà không cần filesystem.
+    pub fn open_file(&mut self, path: &std::path::Path) {
+        if let Err(msg) = crate::popups::file_open::check_openable(path) {
+            self.msg_popup.show_error(msg);
+            return;
+        }
+        match std::fs::read_to_string(path) {
+            Ok(text) => self.tool_form.set_primary_input(&text),
+            Err(e) => self
+                .msg_popup
+                .show_error(format!("không đọc được {}: {e}", path.display())),
+        }
+        self.needs_redraw = true;
     }
 
     /// Chạy tool khi tới hạn debounce. Gọi mỗi vòng lặp — vì `event::poll` có

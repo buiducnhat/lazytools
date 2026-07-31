@@ -19,6 +19,10 @@ pub enum InternalEvent {
     ClosePalette,
     ShowHelp,
     CopyToClipboard(String),
+    /// Người dùng đã chọn file trong picker.
+    OpenFile(std::path::PathBuf),
+    /// Mở popup lưu cho giá trị output đang focus.
+    SaveOutput(String),
     ShowMsg(String),
     ShowError(ToolError),
     Quit,

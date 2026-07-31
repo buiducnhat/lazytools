@@ -189,6 +189,8 @@ impl KeyConfig {
             "palette" => k.palette = ev,
             "help" => k.help = ev,
             "copy" => k.copy = ev,
+            "open_file" => k.open_file = ev,
+            "save_file" => k.save_file = ev,
             "backspace" => k.backspace = ev,
             "delete" => k.delete = ev,
             "line_start" => k.line_start = ev,

@@ -27,6 +27,8 @@ pub struct KeysList {
     pub palette: KeyEvent,
     pub help: KeyEvent,
     pub copy: KeyEvent,
+    pub open_file: KeyEvent,
+    pub save_file: KeyEvent,
 
     // Soạn thảo trong TextArea.
     pub backspace: KeyEvent,
@@ -54,6 +56,10 @@ impl Default for KeysList {
             palette: ctrl(KeyCode::Char('p')),
             help: key(KeyCode::Char('?')),
             copy: key(KeyCode::Char('y')),
+            // Ctrl chứ không phải `o`/`s` trần: ô nhập text tiêu thụ ký tự
+            // thường trước, nên phím trần sẽ vô dụng ngay khi đang gõ.
+            open_file: ctrl(KeyCode::Char('o')),
+            save_file: ctrl(KeyCode::Char('s')),
 
             backspace: key(KeyCode::Backspace),
             delete: key(KeyCode::Delete),

@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use lazytools_core::error::ToolError;
 use lazytools_core::spec::{RunMode, ToolSpec};
-use lazytools_core::value::{Inputs, Outputs};
+use lazytools_core::value::{Inputs, Outputs, Value};
 use ratatui::Frame;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
@@ -171,6 +171,16 @@ impl ToolFormComponent {
     /// Giá trị của widget đang focus — P3 dùng cho phím copy.
     pub fn focused_value(&self) -> Option<String> {
         self.widgets.get(self.focus).map(|w| w.value().as_display())
+    }
+
+    /// Nạp nội dung file vào **input chính** (field input đầu tiên của spec).
+    /// Tool vẫn chỉ nhận text thuần — đọc file là việc của tầng UI.
+    pub fn set_primary_input(&mut self, text: &str) {
+        if let Some(w) = self.widgets.first_mut() {
+            w.set_value(&Value::Text(text.to_string()));
+            self.mark_dirty();
+            self.request_run_now();
+        }
     }
 }
 

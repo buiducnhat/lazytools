@@ -28,4 +28,4 @@ expression: screen
 "│                      ││                                                                │"
 "│                      ││                                                                │"
 "└──────────────────────┘└────────────────────────────────────────────────────────────────┘"
-"[Tab] field kế [^P] palette [y] copy [?] trợ giúp [q] thoát                               "
+"[Tab] field kế [^P] palette [^O] mở file [^S] lưu file [y] copy [?] trợ giúp [q] thoát    "
