@@ -9,6 +9,12 @@ lazytools-core.workspace = true
 clap.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
+# crossterm KHÔNG khai trực tiếp — dùng `ratatui::crossterm` để không lệch version.
+ratatui.workspace = true
+bitflags.workspace = true
+unicode-segmentation.workspace = true
+unicode-width.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true
+insta.workspace = true

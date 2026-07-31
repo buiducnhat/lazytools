@@ -1,0 +1,21 @@
+---
+source: crates/lazytools/tests/snapshots.rs
+assertion_line: 41
+expression: "render(50, 16)"
+---
+"┌ Hash Text ─────────────────────────────────────┐"
+"│Form của tool xuất hiện ở Phase 2B.             │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"└────────────────────────────────────────────────┘"
+"[j/k] chọn tool [Tab] đổi vùng [q] thoát          "

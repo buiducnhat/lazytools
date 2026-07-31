@@ -1,7 +1,6 @@
-mod cli;
-
 use std::process::ExitCode;
 
+use lazytools::{cli, tui};
 use lazytools_core::registry::Registry;
 
 fn main() -> ExitCode {
@@ -9,10 +8,14 @@ fn main() -> ExitCode {
     let registry = Registry::new();
 
     if args.len() > 1 {
-        cli::run(&registry, args)
-    } else {
-        // P2 thay bằng TUI thật.
-        eprintln!("TUI chưa có, xem `lazytools --help`");
-        ExitCode::from(2)
+        return cli::run(&registry, args);
+    }
+
+    match tui::run(registry) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::from(1)
+        }
     }
 }

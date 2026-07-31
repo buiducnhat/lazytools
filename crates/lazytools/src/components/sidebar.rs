@@ -1,0 +1,203 @@
+use anyhow::Result;
+use lazytools_core::registry::Registry;
+use lazytools_core::spec::Category;
+use ratatui::Frame;
+use ratatui::crossterm::event::Event;
+use ratatui::layout::Rect;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, List, ListItem, ListState};
+
+use super::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState};
+use crate::keys::{KeyConfig, key_match};
+use crate::queue::{InternalEvent, Queue};
+use crate::ui::SharedTheme;
+
+/// Danh sách phẳng có tiêu đề nhóm. `id`/`name` của tool đều là `&'static str`
+/// nên sidebar không cần mượn `Registry` sau lúc dựng.
+enum Row {
+    Header(&'static str),
+    Tool {
+        id: &'static str,
+        name: &'static str,
+    },
+}
+
+/// Ký tự đầu tiên — cắt theo `char` chứ không theo byte để không panic với UTF-8.
+fn first_char(s: &str) -> String {
+    s.chars().next().map(String::from).unwrap_or_default()
+}
+
+pub struct Sidebar {
+    rows: Vec<Row>,
+    selected: usize,
+    focused: bool,
+    queue: Queue,
+    theme: SharedTheme,
+    key_config: KeyConfig,
+}
+
+impl Sidebar {
+    pub fn new(
+        registry: &Registry,
+        queue: Queue,
+        theme: SharedTheme,
+        key_config: KeyConfig,
+    ) -> Self {
+        let mut rows = Vec::new();
+        for &category in Category::ALL {
+            let mut tools = registry.by_category(category).peekable();
+            if tools.peek().is_none() {
+                continue;
+            }
+            rows.push(Row::Header(category.label()));
+            for tool in tools {
+                rows.push(Row::Tool {
+                    id: tool.spec().id,
+                    name: tool.spec().name,
+                });
+            }
+        }
+
+        let selected = rows
+            .iter()
+            .position(|r| matches!(r, Row::Tool { .. }))
+            .unwrap_or(0);
+
+        Self {
+            rows,
+            selected,
+            focused: true,
+            queue,
+            theme,
+            key_config,
+        }
+    }
+
+    /// Tool đang chọn — `App` dùng để nạp form lúc khởi động.
+    pub fn selected_tool(&self) -> Option<&'static str> {
+        match self.rows.get(self.selected) {
+            Some(Row::Tool { id, .. }) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// Di chuyển tới dòng tool kế tiếp theo hướng `delta`, bỏ qua tiêu đề nhóm.
+    fn move_selection(&mut self, delta: isize) {
+        let mut idx = self.selected as isize;
+        loop {
+            idx += delta;
+            if idx < 0 || idx as usize >= self.rows.len() {
+                return;
+            }
+            if matches!(self.rows[idx as usize], Row::Tool { .. }) {
+                break;
+            }
+        }
+        self.selected = idx as usize;
+        if let Some(id) = self.selected_tool() {
+            self.queue.push(InternalEvent::SelectTool(id));
+        }
+    }
+}
+
+impl DrawableComponent for Sidebar {
+    fn draw(&self, f: &mut Frame, rect: Rect) -> Result<()> {
+        // Dưới 60 cols sidebar bị ẩn hẳn, `App` truyền rect rỗng.
+        if rect.width == 0 {
+            return Ok(());
+        }
+        let icon_only = rect.width < 12;
+
+        let items: Vec<ListItem> = self
+            .rows
+            .iter()
+            .map(|row| match row {
+                Row::Header(name) => {
+                    let text = if icon_only {
+                        first_char(name)
+                    } else {
+                        (*name).to_string()
+                    };
+                    ListItem::new(Line::from(Span::styled(text, self.theme.group())))
+                }
+                Row::Tool { name, .. } => {
+                    let text = if icon_only {
+                        format!(" {}", first_char(name))
+                    } else {
+                        format!("  {name}")
+                    };
+                    ListItem::new(Line::from(Span::styled(text, self.theme.text())))
+                }
+            })
+            .collect();
+
+        let block = Block::bordered()
+            .border_style(self.theme.block(self.focused))
+            .title_style(self.theme.title(self.focused))
+            .title(if icon_only { "" } else { " Tools " });
+
+        let list = List::new(items)
+            .block(block)
+            .highlight_style(self.theme.selection());
+
+        let mut state = ListState::default();
+        state.select(Some(self.selected));
+        f.render_stateful_widget(list, rect, &mut state);
+        Ok(())
+    }
+}
+
+impl Component for Sidebar {
+    fn commands(&self, out: &mut Vec<CommandInfo>, force_all: bool) -> CommandBlocking {
+        if self.focused || force_all {
+            let keys = &self.key_config.keys;
+            out.push(
+                CommandInfo::new(
+                    format!(
+                        "{}/{}",
+                        self.key_config.hint(keys.move_down),
+                        self.key_config.hint(keys.move_up)
+                    ),
+                    "chọn tool",
+                    "Sidebar",
+                )
+                .order(1),
+            );
+        }
+        CommandBlocking::PassingOn
+    }
+
+    fn event(&mut self, ev: &Event) -> Result<EventState> {
+        if !self.focused {
+            return Ok(EventState::NotConsumed);
+        }
+        let Event::Key(k) = ev else {
+            return Ok(EventState::NotConsumed);
+        };
+        let keys = &self.key_config.keys;
+
+        if key_match(k, keys.move_down) || key_match(k, keys.move_down_alt) {
+            self.move_selection(1);
+            return Ok(EventState::Consumed);
+        }
+        if key_match(k, keys.move_up) || key_match(k, keys.move_up_alt) {
+            self.move_selection(-1);
+            return Ok(EventState::Consumed);
+        }
+        if key_match(k, keys.confirm) {
+            if let Some(id) = self.selected_tool() {
+                self.queue.push(InternalEvent::SelectTool(id));
+            }
+            return Ok(EventState::Consumed);
+        }
+        Ok(EventState::NotConsumed)
+    }
+
+    fn focused(&self) -> bool {
+        self.focused
+    }
+
+    fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+}
