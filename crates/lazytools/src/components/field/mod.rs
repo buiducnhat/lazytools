@@ -17,8 +17,8 @@ use super::EventState;
 use crate::keys::KeyConfig;
 use crate::ui::SharedTheme;
 
-/// Một ô trong form. `ToolFormComponent` chỉ nói chuyện qua trait này, nên thêm
-/// một `FieldKind` mới là thêm một widget — không đụng tới form.
+/// A field in the form. `ToolFormComponent` only talks through this trait, so adding
+/// a new `FieldKind` means adding a widget — without touching the form.
 pub trait FieldWidget {
     fn key(&self) -> &'static str;
     fn value(&self) -> Value;
@@ -26,15 +26,15 @@ pub trait FieldWidget {
     fn draw(&self, f: &mut Frame, rect: Rect, focused: bool);
     fn event(&mut self, ev: &Event, keys: &KeyConfig) -> Result<EventState>;
     fn set_error(&mut self, msg: Option<String>);
-    /// Chiều cao mong muốn, đã tính cả viền và dòng lỗi (nếu có).
+    /// Desired height, already accounting for the border and the error line (if any).
     fn desired_height(&self) -> u16;
-    /// Output là chỉ-đọc: nhận focus được (để copy ở P3) nhưng không sửa được.
+    /// Output is read-only: it can receive focus (for copying in P3) but can't be edited.
     fn is_readonly(&self) -> bool;
 }
 
-/// Dựng widget từ một `Field` của spec. Đây là **chỗ duy nhất** ánh xạ
-/// `FieldKind` → widget; `match` không có nhánh `_` nên thêm một `FieldKind`
-/// mới sẽ làm compiler bắt lỗi ngay tại đây thay vì rơi vào fallback im lặng.
+/// Builds a widget from a spec `Field`. This is the **only place** that maps
+/// `FieldKind` → widget; the `match` has no `_` arm, so adding a new `FieldKind`
+/// will make the compiler catch it right here instead of falling through to a silent fallback.
 pub fn build(field: &Field, theme: SharedTheme, readonly: bool) -> Box<dyn FieldWidget> {
     match &field.kind {
         FieldKind::Text { multiline, .. } => {

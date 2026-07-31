@@ -10,18 +10,18 @@ pub struct KeyConfig {
     pub keys: KeysList,
 }
 
-/// So khớp phím người dùng bấm với một binding. Dùng ở mọi component để không
-/// có `KeyCode::Char(..)` nào nằm rải rác ngoài `KeysList`.
+/// Matches the key the user pressed against a binding. Used in every component so
+/// no `KeyCode::Char(..)` is scattered outside `KeysList`.
 pub fn key_match(ev: &KeyEvent, binding: KeyEvent) -> bool {
     ev.code == binding.code && ev.modifiers == binding.modifiers
 }
 
-/// Vì sao config không được như ý — để `App` hiện popup, **không** để chặn khởi động.
+/// Why the config didn't work out as expected — lets `App` show a popup, **not** block startup.
 #[derive(Debug)]
 pub enum KeyConfigIssue {
-    /// File sai cú pháp TOML.
+    /// File has invalid TOML syntax.
     Malformed { path: PathBuf, msg: String },
-    /// Một số tên phím không nhận diện được; các phím đó giữ mặc định.
+    /// Some key names weren't recognized; those keys keep their defaults.
     UnknownKeys { path: PathBuf, entries: Vec<String> },
 }
 
@@ -29,11 +29,11 @@ impl KeyConfigIssue {
     pub fn message(&self) -> String {
         match self {
             Self::Malformed { path, msg } => format!(
-                "Không đọc được {}:\n{msg}\n\nĐang dùng phím mặc định.",
+                "Could not read {}:\n{msg}\n\nUsing default keys.",
                 path.display()
             ),
             Self::UnknownKeys { path, entries } => format!(
-                "Bỏ qua {} mục trong {}:\n{}\n\nCác phím còn lại vẫn được áp dụng.",
+                "Skipping {} entries in {}:\n{}\n\nThe remaining keys still apply.",
                 entries.len(),
                 path.display(),
                 entries.join("\n")
@@ -42,7 +42,7 @@ impl KeyConfigIssue {
     }
 }
 
-/// `~/.config/lazytools/keys.toml`. Trả `None` nếu không xác định được HOME.
+/// `~/.config/lazytools/keys.toml`. Returns `None` if HOME can't be determined.
 pub fn default_path() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
@@ -55,7 +55,7 @@ pub fn default_path() -> Option<PathBuf> {
     )
 }
 
-/// Phân tích chuỗi dạng `"ctrl+shift+p"` thành `KeyEvent`.
+/// Parses a string like `"ctrl+shift+p"` into a `KeyEvent`.
 pub fn parse_key(spec: &str) -> Option<KeyEvent> {
     let spec = spec.trim();
     if spec.is_empty() {
@@ -64,8 +64,9 @@ pub fn parse_key(spec: &str) -> Option<KeyEvent> {
 
     let mut modifiers = KeyModifiers::NONE;
     let mut parts: Vec<&str> = spec.split('+').collect();
-    // Phần cuối là tên phím, phần trước là modifier. (Bản thân dấu `+` không
-    // dùng được làm binding — chưa cần tới, và giữ parser đơn giản.)
+    // The last part is the key name, the earlier parts are modifiers. (The `+`
+    // character itself can't be used as a binding — not needed yet, and it keeps
+    // the parser simple.)
     let name = parts.pop()?;
 
     for m in &parts {
@@ -108,7 +109,7 @@ pub fn parse_key(spec: &str) -> Option<KeyEvent> {
                 if chars.next().is_some() {
                     return None;
                 }
-                // `shift` trên ký tự đã nằm sẵn trong chính chữ hoa.
+                // `shift` on a character is already baked into the uppercase letter itself.
                 if modifiers.contains(KeyModifiers::SHIFT) && c.is_ascii_alphabetic() {
                     modifiers.remove(KeyModifiers::SHIFT);
                     KeyCode::Char(c.to_ascii_uppercase())
@@ -123,12 +124,12 @@ pub fn parse_key(spec: &str) -> Option<KeyEvent> {
 }
 
 impl KeyConfig {
-    /// Đọc config từ đĩa.
+    /// Reads the config from disk.
     ///
-    /// **Config hỏng không được chặn app khởi động** — người dùng phải luôn vào
-    /// được app để sửa. Ba trường hợp: không có file (im lặng, đường đi phổ
-    /// biến nhất), sai cú pháp TOML (dùng default + báo), tên phím lạ (giữ
-    /// default cho riêng phím đó + báo).
+    /// **A broken config must never block app startup** — the user must always be
+    /// able to get into the app to fix it. Three cases: no file (silent, the most
+    /// common path), invalid TOML syntax (use defaults + report), unknown key
+    /// name (keep the default for that specific key + report).
     pub fn load() -> (Self, Option<KeyConfigIssue>) {
         match default_path() {
             Some(path) => Self::load_from(&path),
@@ -138,7 +139,7 @@ impl KeyConfig {
 
     pub fn load_from(path: &Path) -> (Self, Option<KeyConfigIssue>) {
         let Ok(text) = std::fs::read_to_string(path) else {
-            // Không có file (hoặc không đọc được) là chuyện bình thường, không phải lỗi.
+            // No file (or unreadable) is a normal case, not an error.
             return (Self::default(), None);
         };
 
@@ -161,8 +162,10 @@ impl KeyConfig {
         for (name, spec) in table {
             match parse_key(&spec) {
                 Some(ev) if config.set_binding(&name, ev) => {}
-                Some(_) => unknown.push(format!("  {name}: không có phím nào tên vậy")),
-                None => unknown.push(format!("  {name} = \"{spec}\": không hiểu tổ hợp phím")),
+                Some(_) => unknown.push(format!("  {name}: no such key binding")),
+                None => unknown.push(format!(
+                    "  {name} = \"{spec}\": unrecognized key combination"
+                )),
             }
         }
 
@@ -173,7 +176,7 @@ impl KeyConfig {
         (config, issue)
     }
 
-    /// `false` nếu không có binding nào mang tên đó.
+    /// `false` if no binding has that name.
     fn set_binding(&mut self, name: &str, ev: KeyEvent) -> bool {
         let k = &mut self.keys;
         match name {
@@ -201,8 +204,9 @@ impl KeyConfig {
         true
     }
 
-    /// Chuỗi hiển thị của một phím: `^P`, `Tab`, `q`, `↑`.
-    /// cmdbar và help popup đều đọc từ đây nên hint không bao giờ lệch phím thật.
+    /// Display string for a key: `^P`, `Tab`, `q`, `↑`.
+    /// Both the cmdbar and the help popup read from here, so the hint never
+    /// drifts from the real key binding.
     pub fn hint(&self, ev: KeyEvent) -> String {
         let mut s = String::new();
         if ev.modifiers.contains(KeyModifiers::CONTROL) {
@@ -213,7 +217,7 @@ impl KeyConfig {
         }
         match ev.code {
             KeyCode::Char(' ') => s.push_str("Space"),
-            // Quy ước hiển thị tổ hợp Ctrl là chữ hoa: `^P`.
+            // Convention: display Ctrl combos with an uppercase letter: `^P`.
             KeyCode::Char(c) if ev.modifiers.contains(KeyModifiers::CONTROL) => {
                 s.push(c.to_ascii_uppercase());
             }
@@ -273,7 +277,7 @@ mod tests {
             parse_key("alt+enter"),
             Some(ev(KeyCode::Enter, KeyModifiers::ALT))
         );
-        // `shift` trên ký tự được gộp vào chính chữ hoa.
+        // `shift` on a character is merged into the uppercase letter itself.
         assert_eq!(
             parse_key("ctrl+shift+p"),
             Some(ev(KeyCode::Char('P'), KeyModifiers::CONTROL))
@@ -290,11 +294,8 @@ mod tests {
 
     #[test]
     fn missing_file_is_not_an_error() {
-        let (config, issue) = KeyConfig::load_from(Path::new("/khong/ton/tai/keys.toml"));
-        assert!(
-            issue.is_none(),
-            "file không tồn tại là đường đi bình thường"
-        );
+        let (config, issue) = KeyConfig::load_from(Path::new("/does/not/exist/keys.toml"));
+        assert!(issue.is_none(), "a missing file is the normal path");
         assert_eq!(config.keys.quit, KeysList::default().quit);
     }
 
@@ -303,7 +304,7 @@ mod tests {
         let dir = std::env::temp_dir().join("lazytools-test-malformed");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("keys.toml");
-        std::fs::write(&path, "này thì không phải toml === {{{").unwrap();
+        std::fs::write(&path, "this is not toml === {{{").unwrap();
 
         let (config, issue) = KeyConfig::load_from(&path);
         assert!(matches!(issue, Some(KeyConfigIssue::Malformed { .. })));
@@ -318,22 +319,22 @@ mod tests {
         let path = dir.join("keys.toml");
         std::fs::write(
             &path,
-            "palette = \"ctrl+k\"\nkhong_co_phim_nay = \"x\"\nhelp = \"khong+hieu\"\n",
+            "palette = \"ctrl+k\"\nno_such_key = \"x\"\nhelp = \"not+understood\"\n",
         )
         .unwrap();
 
         let (config, issue) = KeyConfig::load_from(&path);
-        // Phím hợp lệ vẫn được áp dụng...
+        // Valid keys still get applied...
         assert_eq!(
             config.keys.palette,
             ev(KeyCode::Char('k'), KeyModifiers::CONTROL)
         );
-        // ...phím lạ giữ mặc định...
+        // ...unknown keys keep their default...
         assert_eq!(config.keys.help, KeysList::default().help);
-        // ...và người dùng được báo về cả hai mục bị bỏ qua.
+        // ...and the user is informed about both skipped entries.
         match issue {
             Some(KeyConfigIssue::UnknownKeys { entries, .. }) => assert_eq!(entries.len(), 2),
-            other => panic!("kỳ vọng UnknownKeys, nhận {other:?}"),
+            other => panic!("expected UnknownKeys, got {other:?}"),
         }
         std::fs::remove_dir_all(&dir).ok();
     }

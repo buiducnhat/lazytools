@@ -5,12 +5,13 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub use key_config::{KeyConfig, key_match};
 
-/// Ký tự người dùng vừa gõ, nếu đây là phím ký tự thường.
+/// The character the user just typed, if this is a plain character key.
 ///
-/// Nhập text **không** phải một binding, nên nó không nằm trong `KeysList`.
-/// Hàm này sống ở `keys/` để `KeyCode::Char` không rò rỉ vào `components/` —
-/// giữ đúng bất biến "component không biết mã phím cụ thể".
-/// `SHIFT` được cho qua (chữ hoa); `CONTROL`/`ALT` thì không (đó là binding).
+/// Text input is **not** a binding, so it doesn't live in `KeysList`.
+/// This function lives in `keys/` so that `KeyCode::Char` never leaks into
+/// `components/` — preserving the invariant that "a component doesn't know
+/// specific key codes".
+/// `SHIFT` is passed through (uppercase); `CONTROL`/`ALT` are not (those are bindings).
 pub fn typed_char(ev: &KeyEvent) -> Option<char> {
     if ev
         .modifiers

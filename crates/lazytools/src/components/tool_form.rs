@@ -1,5 +1,5 @@
-//! Component generic đọc `ToolSpec` và dựng form. Không có tên tool nào ở đây —
-//! đây là lý do thêm tool thứ 9 không tốn dòng UI nào.
+//! A generic component that reads a `ToolSpec` and builds the form. No tool name lives here —
+//! that's why adding the 9th tool costs zero lines of UI code.
 
 use std::time::{Duration, Instant};
 
@@ -19,17 +19,17 @@ use crate::keys::{KeyConfig, key_match};
 use crate::queue::{InternalEvent, Queue};
 use crate::ui::SharedTheme;
 
-/// Chờ ngừng gõ bao lâu rồi mới chạy lại tool.
+/// How long to wait after typing stops before re-running the tool.
 const DEBOUNCE: Duration = Duration::from_millis(80);
 
-/// Trên ngưỡng này thì tự hạ xuống hành vi `OnDemand`. Không có nó, paste một
-/// file JSON lớn với `RunMode::Live` sẽ treo UI.
+/// Above this threshold, behavior auto-downgrades to `OnDemand`. Without it, pasting a
+/// large JSON file with `RunMode::Live` would freeze the UI.
 const LARGE_INPUT: usize = 256 * 1024;
 
 pub struct ToolFormComponent {
     tool_id: Option<&'static str>,
     widgets: Vec<Box<dyn FieldWidget>>,
-    /// Số widget đầu tiên là input + option; phần còn lại là output (chỉ đọc).
+    /// The first N widgets are inputs + options; the rest are outputs (read-only).
     editable_count: usize,
     focus: usize,
     mode: RunMode,
@@ -58,7 +58,7 @@ impl ToolFormComponent {
         }
     }
 
-    /// Dựng lại toàn bộ widget từ spec và nạp `default` vào state.
+    /// Rebuilds all widgets from the spec and loads `default` into state.
     pub fn set_tool(&mut self, spec: &ToolSpec) {
         let mut widgets: Vec<Box<dyn FieldWidget>> = Vec::new();
 
@@ -81,7 +81,7 @@ impl ToolFormComponent {
         self.focus = 0;
         self.mode = spec.mode;
         self.error = None;
-        // Chạy ngay một lần để output không trống khi vừa mở tool.
+        // Run once immediately so the output isn't empty right when the tool opens.
         self.run_at = Some(Instant::now());
     }
 
@@ -89,7 +89,7 @@ impl ToolFormComponent {
         self.tool_id
     }
 
-    /// Tổng độ dài input — cơ sở cho ngưỡng an toàn 256KB.
+    /// Total input length — the basis for the 256KB safety threshold.
     fn total_input_len(&self) -> usize {
         self.widgets
             .iter()
@@ -98,7 +98,7 @@ impl ToolFormComponent {
             .sum()
     }
 
-    /// `RunMode` thực tế: hạ xuống `OnDemand` khi input quá lớn.
+    /// The effective `RunMode`: downgraded to `OnDemand` when input is too large.
     fn effective_mode(&self) -> RunMode {
         if self.total_input_len() > LARGE_INPUT {
             RunMode::OnDemand
@@ -121,7 +121,7 @@ impl ToolFormComponent {
         self.run_at = Some(Instant::now());
     }
 
-    /// `true` khi tới hạn debounce — `App` gọi rồi chạy tool.
+    /// `true` once the debounce deadline is reached — `App` calls this then runs the tool.
     pub fn take_run_request(&mut self) -> bool {
         match self.run_at {
             Some(at) if Instant::now() >= at => {
@@ -140,10 +140,10 @@ impl ToolFormComponent {
         inputs
     }
 
-    /// Nạp kết quả chạy tool vào form.
+    /// Loads the tool run result into the form.
     ///
-    /// `InvalidInput` mang tên field nên lỗi hiện **inline ngay dưới ô sai**;
-    /// các lỗi khác hiện ở vùng lỗi chung.
+    /// `InvalidInput` carries a field name so the error shows **inline right under the
+    /// offending field**; other errors show in the general error area.
     pub fn set_result(&mut self, result: Result<Outputs, ToolError>) {
         for w in &mut self.widgets {
             w.set_error(None);
@@ -168,13 +168,13 @@ impl ToolFormComponent {
         }
     }
 
-    /// Giá trị của widget đang focus — P3 dùng cho phím copy.
+    /// Value of the currently focused widget — used by P3 for the copy key.
     pub fn focused_value(&self) -> Option<String> {
         self.widgets.get(self.focus).map(|w| w.value().as_display())
     }
 
-    /// Nạp nội dung file vào **input chính** (field input đầu tiên của spec).
-    /// Tool vẫn chỉ nhận text thuần — đọc file là việc của tầng UI.
+    /// Loads file content into the **primary input** (the spec's first input field).
+    /// The tool still only receives plain text — reading the file is the UI layer's job.
     pub fn set_primary_input(&mut self, text: &str) {
         if let Some(w) = self.widgets.first_mut() {
             w.set_value(&Value::Text(text.to_string()));
@@ -188,7 +188,7 @@ impl DrawableComponent for ToolFormComponent {
     fn draw(&self, f: &mut Frame, rect: Rect) -> Result<()> {
         if self.widgets.is_empty() {
             f.render_widget(
-                Paragraph::new("Chọn một tool ở sidebar.").style(self.theme.dim()),
+                Paragraph::new("Select a tool in the sidebar.").style(self.theme.dim()),
                 rect,
             );
             return Ok(());
@@ -212,11 +212,11 @@ impl DrawableComponent for ToolFormComponent {
             y += area.height;
         }
 
-        // Badge khi input lớn khiến tool tự hạ xuống chạy-theo-yêu-cầu.
+        // Badge shown when large input makes the tool auto-downgrade to run-on-demand.
         if self.is_downgraded() && y < bottom {
             f.render_widget(
                 Paragraph::new(Line::from(format!(
-                    "input lớn — nhấn {} để chạy",
+                    "large input — press {} to run",
                     self.key_config.hint(self.key_config.keys.confirm)
                 )))
                 .style(self.theme.dim()),
@@ -240,7 +240,7 @@ impl DrawableComponent for ToolFormComponent {
                     .block(
                         Block::bordered()
                             .border_style(self.theme.error())
-                            .title(" Lỗi "),
+                            .title(" Error "),
                     ),
                 Rect {
                     x: rect.x,
@@ -259,12 +259,12 @@ impl Component for ToolFormComponent {
         if (self.focused && !self.widgets.is_empty()) || force_all {
             let keys = &self.key_config.keys;
             out.push(
-                CommandInfo::new(self.key_config.hint(keys.focus_next), "field kế", "Form")
+                CommandInfo::new(self.key_config.hint(keys.focus_next), "next field", "Form")
                     .order(2),
             );
             if self.effective_mode() == RunMode::OnDemand {
                 out.push(
-                    CommandInfo::new(self.key_config.hint(keys.confirm), "chạy", "Form").order(3),
+                    CommandInfo::new(self.key_config.hint(keys.confirm), "run", "Form").order(3),
                 );
             }
         }
@@ -279,7 +279,7 @@ impl Component for ToolFormComponent {
         if let Event::Key(k) = ev {
             let keys = &self.key_config.keys;
 
-            // Tab đi tới field kế; hết field thì trả quyền cho App để về sidebar.
+            // Tab moves to the next field; once fields run out, control returns to App to go back to the sidebar.
             if key_match(k, keys.focus_next) {
                 if self.focus + 1 < self.widgets.len() {
                     self.focus += 1;
@@ -289,7 +289,7 @@ impl Component for ToolFormComponent {
                 return Ok(EventState::NotConsumed);
             }
 
-            // `OnDemand` (hoặc Live đã bị hạ cấp) chạy khi nhấn Enter.
+            // `OnDemand` (or Live that's been downgraded) runs when Enter is pressed.
             let on_demand = self.effective_mode() == RunMode::OnDemand;
             let editable = self.focus < self.editable_count;
             if on_demand && editable && key_match(k, keys.confirm) {

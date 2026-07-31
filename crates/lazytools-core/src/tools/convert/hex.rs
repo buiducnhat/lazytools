@@ -13,7 +13,7 @@ impl Default for HexTool {
     fn default() -> Self {
         Self {
             spec: ToolSpec::new("convert.hex", "Hex", Category::Convert)
-                .describe("Chuyển văn bản ⇄ hex")
+                .describe("Convert text ⇄ hex")
                 .keywords(&["hex", "hexadecimal", "base16", "encode", "decode"])
                 .input(Field::text("text").multiline().label("Input"))
                 .option(
@@ -35,12 +35,12 @@ impl Tool for HexTool {
         let text = i.text("text");
         let result = match i.choice("direction") {
             "decode" => {
-                // Bỏ khoảng trắng để chấp nhận cả dạng "48 65 6c".
+                // Strip whitespace so the form "48 65 6c" is accepted too.
                 let cleaned: String = text.chars().filter(|c| !c.is_whitespace()).collect();
                 let bytes = hex::decode(&cleaned)
-                    .map_err(|e| ToolError::invalid("text", format!("hex không hợp lệ: {e}")))?;
+                    .map_err(|e| ToolError::invalid("text", format!("invalid hex: {e}")))?;
                 String::from_utf8(bytes).map_err(|e| {
-                    ToolError::invalid("text", format!("giải mã ra bytes không phải UTF-8: {e}"))
+                    ToolError::invalid("text", format!("decoded bytes are not valid UTF-8: {e}"))
                 })?
             }
             _ => hex::encode(text.as_bytes()),
@@ -74,7 +74,7 @@ mod tests {
         let cases = [
             ("hello", "68656c6c6f"),
             ("", ""),
-            ("xin chào", "78696e206368c3a06f"),
+            ("goodbye", "676f6f64627965"),
         ];
         for (plain, encoded) in cases {
             assert_eq!(ok(plain, "encode"), encoded, "encode {plain:?}");

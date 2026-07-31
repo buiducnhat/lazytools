@@ -9,7 +9,7 @@ pub enum Value {
 }
 
 impl Value {
-    /// Dạng chuỗi để hiển thị / ghi ra CLI. `Num`/`Bool` cũng chuyển được.
+    /// String form for display / CLI output. `Num`/`Bool` also convert.
     pub fn as_display(&self) -> String {
         match self {
             Self::Text(s) | Self::Choice(s) => s.clone(),
@@ -50,8 +50,9 @@ impl From<bool> for Value {
     }
 }
 
-/// Accessor đều panic-free: thiếu key hoặc sai biến thể thì trả giá trị rỗng/zero.
-/// `run()` nhờ vậy không phải viết `unwrap()`, và tool khai thiếu field không làm sập app.
+/// All accessors are panic-free: a missing key or wrong variant returns an empty/zero
+/// value. Thanks to this, `run()` never has to write `unwrap()`, and a tool that
+/// forgets to declare a field won't crash the app.
 #[derive(Debug, Default, Clone)]
 pub struct Inputs(HashMap<&'static str, Value>);
 
@@ -104,7 +105,7 @@ impl Outputs {
         Self::default()
     }
 
-    /// Shorthand cho trường hợp phổ biến nhất: đúng một output.
+    /// Shorthand for the most common case: exactly one output.
     pub fn one(key: &'static str, v: impl Into<Value>) -> Self {
         let mut o = Self::new();
         o.set(key, v);

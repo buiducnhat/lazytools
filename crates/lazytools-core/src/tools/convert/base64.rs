@@ -16,7 +16,7 @@ impl Default for Base64Tool {
     fn default() -> Self {
         Self {
             spec: ToolSpec::new("convert.base64", "Base64", Category::Convert)
-                .describe("Chuyển văn bản ⇄ Base64")
+                .describe("Convert text ⇄ Base64")
                 .keywords(&["base64", "b64", "encode", "decode", "url safe"])
                 .input(Field::text("text").multiline().label("Input"))
                 .option(
@@ -28,7 +28,7 @@ impl Default for Base64Tool {
                     Field::toggle("url_safe")
                         .default(false)
                         .label("URL safe")
-                        .help("Dùng bảng chữ cái an toàn cho URL (-_ thay vì +/)"),
+                        .help("Use the URL-safe alphabet (-_ instead of +/)"),
                 )
                 .output(Field::text("result").mono().label("Result")),
         }
@@ -41,8 +41,8 @@ impl Tool for Base64Tool {
     }
 
     fn run(&self, i: &Inputs) -> Result<Outputs, ToolError> {
-        // `Engine` không dyn-compatible (method có generic), nên chọn engine
-        // bằng giá trị chứ không qua trait object.
+        // `Engine` isn't dyn-compatible (its methods are generic), so the engine
+        // is selected by value rather than through a trait object.
         let engine = if i.bool("url_safe") {
             URL_SAFE
         } else {
@@ -55,9 +55,9 @@ impl Tool for Base64Tool {
                 let cleaned: String = text.chars().filter(|c| !c.is_whitespace()).collect();
                 let bytes = engine
                     .decode(cleaned.as_bytes())
-                    .map_err(|e| ToolError::invalid("text", format!("base64 không hợp lệ: {e}")))?;
+                    .map_err(|e| ToolError::invalid("text", format!("invalid base64: {e}")))?;
                 String::from_utf8(bytes).map_err(|e| {
-                    ToolError::invalid("text", format!("giải mã ra bytes không phải UTF-8: {e}"))
+                    ToolError::invalid("text", format!("decoded bytes are not valid UTF-8: {e}"))
                 })?
             }
             _ => engine.encode(text.as_bytes()),
@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn round_trip_standard() {
-        for plain in ["hello", "", "xin chào"] {
+        for plain in ["hello", "", "goodbye"] {
             let encoded = ok(plain, "encode", false);
             assert_eq!(ok(&encoded, "decode", false), plain, "round trip {plain:?}");
         }
@@ -99,11 +99,11 @@ mod tests {
 
     #[test]
     fn url_safe_uses_different_alphabet() {
-        // Byte 0xfb 0xff sinh `+` / `/` ở bảng chuẩn và `-` / `_` ở bảng URL-safe.
+        // Bytes 0xfb 0xff produce `+` / `/` in the standard alphabet and `-` / `_` in the URL-safe one.
         let plain = "~~~?";
         let std = ok(plain, "encode", false);
         let url = ok(plain, "encode", true);
-        assert_ne!(std, url, "hai bảng chữ cái phải cho kết quả khác nhau");
+        assert_ne!(std, url, "the two alphabets must produce different results");
         assert_eq!(ok(&url, "decode", true), plain);
     }
 

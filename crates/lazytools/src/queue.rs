@@ -1,5 +1,6 @@
-//! Kênh để component con nói ngược lên `App` mà không tạo tham chiếu vòng.
-//! Biến thể của `InternalEvent` được thêm dần theo phase cần tới.
+//! A channel for a child component to talk back up to `App` without creating a
+//! reference cycle. `InternalEvent` variants get added incrementally as each
+//! phase needs them.
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -11,17 +12,17 @@ use lazytools_core::ToolError;
 #[derive(Debug)]
 pub enum InternalEvent {
     SelectTool(&'static str),
-    /// Một input đổi giá trị → hẹn giờ chạy lại tool (debounce).
+    /// An input's value changed → schedule a debounced tool re-run.
     InputChanged,
-    /// `RunMode::OnDemand` được kích bằng phím.
+    /// `RunMode::OnDemand` was triggered via a key press.
     RunRequested,
     OpenPalette,
     ClosePalette,
     ShowHelp,
     CopyToClipboard(String),
-    /// Người dùng đã chọn file trong picker.
+    /// The user picked a file in the picker.
     OpenFile(std::path::PathBuf),
-    /// Mở popup lưu cho giá trị output đang focus.
+    /// Opens the save popup for the currently focused output value.
     SaveOutput(String),
     ShowMsg(String),
     ShowError(ToolError),
@@ -32,9 +33,9 @@ bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct NeedsUpdate: u32 {
         const ALL      = 0b0001;
-        /// Chạy lại tool.
+        /// Re-run the tool.
         const OUTPUT   = 0b0010;
-        /// Dựng lại hint của cmdbar.
+        /// Rebuild the cmdbar hints.
         const COMMANDS = 0b0100;
         const SIDEBAR  = 0b1000;
     }

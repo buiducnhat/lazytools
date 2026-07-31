@@ -29,9 +29,10 @@ impl Category {
     }
 }
 
-/// `Live` chạy lại tool mỗi lần input đổi (có debounce); `OnDemand` chỉ chạy khi
-/// người dùng yêu cầu. Nằm trong spec để ràng buộc chi phí hiển hiện ngay lúc khai
-/// báo tool — bcrypt cost 12 mất ~250ms, chạy live sẽ treo UI.
+/// `Live` re-runs the tool every time the input changes (with debounce); `OnDemand`
+/// only runs when the user explicitly requests it. This lives in the spec so the
+/// cost constraint is visible right at the point the tool is declared — bcrypt at
+/// cost 12 takes ~250ms, and running it live would freeze the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RunMode {
     #[default]
@@ -119,7 +120,7 @@ impl Field {
     }
 
     pub fn default(mut self, v: impl Into<Value>) -> Self {
-        // `Select` mang giá trị dạng `Choice` để phân biệt với text tự do.
+        // `Select` carries its value as `Choice` to distinguish it from free-form text.
         let v = v.into();
         self.default = Some(match (&self.kind, v) {
             (FieldKind::Select { .. }, Value::Text(s)) => Value::Choice(s),
@@ -192,8 +193,9 @@ impl ToolSpec {
         self
     }
 
-    /// Tên subcommand CLI: bỏ tiền tố category (`crypto.hash` → `hash`).
-    /// Sống ở đây chứ không ở tầng CLI để tầng CLI không phải biết gì về id.
+    /// CLI subcommand name: strips the category prefix (`crypto.hash` → `hash`).
+    /// This lives here rather than in the CLI layer so the CLI layer doesn't need
+    /// to know anything about the id.
     pub fn cli_name(&self) -> &'static str {
         match self.id.split_once('.') {
             Some((_, rest)) => rest,
@@ -201,7 +203,7 @@ impl ToolSpec {
         }
     }
 
-    /// Mọi field của tool, theo thứ tự inputs → options → outputs.
+    /// Every field of the tool, in the order inputs → options → outputs.
     pub fn all_fields(&self) -> impl Iterator<Item = &Field> {
         self.inputs
             .iter()
@@ -209,7 +211,8 @@ impl ToolSpec {
             .chain(self.outputs.iter())
     }
 
-    /// Input nhận dữ liệu từ stdin ở CLI, và là đích của "mở file" trong TUI.
+    /// The input that receives data from stdin in the CLI, and is the target of
+    /// "open file" in the TUI.
     pub fn primary_input(&self) -> Option<&Field> {
         self.inputs.first()
     }

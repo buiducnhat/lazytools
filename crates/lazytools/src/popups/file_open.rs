@@ -1,7 +1,7 @@
-//! Trình duyệt thư mục tối giản để nạp file vào input chính của tool.
+//! A minimal directory browser for loading a file into a tool's main input.
 //!
-//! Mọi trường hợp hệ thống file khó chịu đều phải xử lý chứ **không panic**:
-//! không quyền đọc, symlink hỏng, tên file không phải UTF-8, thư mục rỗng.
+//! Every awkward filesystem edge case must be handled, **never panic**:
+//! no read permission, broken symlinks, non-UTF-8 file names, empty directories.
 
 use std::path::{Path, PathBuf};
 
@@ -17,23 +17,24 @@ use crate::keys::{KeyConfig, key_match};
 use crate::queue::{InternalEvent, Queue};
 use crate::ui::{SharedTheme, centered_rect};
 
-/// Nạp file lớn vào `TextArea` sẽ làm TUI không dùng nổi. Ngưỡng 256KB của P2
-/// chỉ hạ xuống `OnDemand` chứ không giải quyết chi phí render, nên chặn ở đây.
+/// Loading a large file into `TextArea` would make the TUI unusable. P2's 256KB
+/// threshold only downgrades to `OnDemand` rather than solving the render cost,
+/// so we cap it here instead.
 pub const MAX_FILE_BYTES: u64 = 10 * 1024 * 1024;
 
-/// File có nạp vào được không. Trả về lý do đọc được nếu không.
+/// Whether the file can be loaded. Returns a readable reason if not.
 ///
-/// Symlink hỏng và thiếu quyền đọc đều rơi vào nhánh `Err` của `metadata` —
-/// xử lý thành thông báo chứ không panic.
+/// Broken symlinks and missing read permission both fall into `metadata`'s
+/// `Err` branch — turned into a message rather than a panic.
 pub fn check_openable(path: &Path) -> Result<(), String> {
     match std::fs::metadata(path) {
         Ok(meta) if meta.len() > MAX_FILE_BYTES => Err(format!(
-            "file {:.1}MB vượt giới hạn {}MB",
+            "file is {:.1}MB, over the {}MB limit",
             meta.len() as f64 / 1024.0 / 1024.0,
             MAX_FILE_BYTES / 1024 / 1024
         )),
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("không đọc được file: {e}")),
+        Err(e) => Err(format!("could not read file: {e}")),
     }
 }
 
@@ -71,7 +72,7 @@ impl FileOpenPopup {
         popup
     }
 
-    /// Đọc lại thư mục hiện tại. Lỗi trở thành thông báo trong popup, không panic.
+    /// Reloads the current directory. Errors become a message in the popup, never panic.
     fn reload(&mut self) {
         self.selected = 0;
         self.entries.clear();
@@ -87,7 +88,7 @@ impl FileOpenPopup {
         let read = match std::fs::read_dir(&self.cwd) {
             Ok(r) => r,
             Err(e) => {
-                self.error = Some(format!("không đọc được thư mục: {e}"));
+                self.error = Some(format!("could not read directory: {e}"));
                 return;
             }
         };
@@ -95,10 +96,11 @@ impl FileOpenPopup {
         let mut items: Vec<FsEntry> = Vec::new();
         for entry in read.flatten() {
             let path = entry.path();
-            // `is_dir()` theo symlink và trả `false` với symlink hỏng — đúng thứ
-            // ta muốn: không sập, chỉ coi như file thường rồi báo lỗi lúc mở.
+            // `is_dir()` follows symlinks and returns `false` for a broken symlink —
+            // exactly what we want: no crash, just treat it as a regular file and
+            // report an error when opening.
             let is_dir = path.is_dir();
-            // Tên không phải UTF-8 vẫn hiện được nhờ `to_string_lossy`.
+            // Non-UTF-8 names still display fine thanks to `to_string_lossy`.
             let name = entry.file_name().to_string_lossy().into_owned();
             items.push(FsEntry {
                 label: if is_dir { format!("{name}/") } else { name },
@@ -107,7 +109,7 @@ impl FileOpenPopup {
             });
         }
 
-        // Thư mục trước, rồi tới file; trong mỗi nhóm sắp theo tên.
+        // Directories first, then files; sorted by name within each group.
         items.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.label.cmp(&b.label)));
         self.entries.extend(items);
         self.error = None;
@@ -135,7 +137,7 @@ impl FileOpenPopup {
         let (path, is_dir) = (entry.path.clone(), entry.is_dir);
 
         if is_dir {
-            // `canonicalize` gọn hóa `..`; thất bại thì dùng nguyên đường dẫn.
+            // `canonicalize` collapses `..`; falls back to the raw path on failure.
             self.cwd = std::fs::canonicalize(&path).unwrap_or(path);
             self.reload();
             return;
@@ -166,7 +168,7 @@ impl DrawableComponent for FileOpenPopup {
         let block = Block::bordered()
             .border_style(self.theme.block(true))
             .title_style(self.theme.title(true))
-            .title(" Mở file ");
+            .title(" Open file ");
         let inner = block.inner(area);
         f.render_widget(block, area);
 
@@ -186,7 +188,7 @@ impl DrawableComponent for FileOpenPopup {
 
         let items: Vec<ListItem> = if self.entries.is_empty() {
             vec![ListItem::new(Line::from(Span::styled(
-                "(thư mục rỗng)",
+                "(empty directory)",
                 self.theme.dim(),
             )))]
         } else {
@@ -227,12 +229,12 @@ impl Component for FileOpenPopup {
     fn commands(&self, out: &mut Vec<CommandInfo>, _force_all: bool) -> CommandBlocking {
         if self.visible {
             let keys = &self.key_config.keys;
-            out.push(CommandInfo::new(self.key_config.hint(keys.confirm), "mở", "File").order(1));
+            out.push(CommandInfo::new(self.key_config.hint(keys.confirm), "open", "File").order(1));
             out.push(
-                CommandInfo::new(self.key_config.hint(keys.backspace), "lên cấp", "File").order(2),
+                CommandInfo::new(self.key_config.hint(keys.backspace), "up dir", "File").order(2),
             );
             out.push(
-                CommandInfo::new(self.key_config.hint(keys.exit_popup), "hủy", "File").order(3),
+                CommandInfo::new(self.key_config.hint(keys.exit_popup), "cancel", "File").order(3),
             );
             return CommandBlocking::Blocking;
         }

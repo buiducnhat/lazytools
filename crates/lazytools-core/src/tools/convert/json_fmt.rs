@@ -13,7 +13,7 @@ impl Default for JsonFormatTool {
     fn default() -> Self {
         Self {
             spec: ToolSpec::new("convert.json-format", "JSON Format", Category::Convert)
-                .describe("Format hoặc minify JSON")
+                .describe("Format or minify JSON")
                 .keywords(&["json", "format", "pretty", "minify", "beautify", "indent"])
                 .input(Field::text("text").multiline().label("Input"))
                 .option(Field::select("mode", MODES).default("pretty").label("Mode"))
@@ -21,7 +21,7 @@ impl Default for JsonFormatTool {
                     Field::number("indent", 1, 8)
                         .default(2i64)
                         .label("Indent")
-                        .help("Số khoảng trắng mỗi cấp (chỉ dùng ở chế độ pretty)"),
+                        .help("Number of spaces per level (only used in pretty mode)"),
                 )
                 .output(Field::text("result").multiline().mono().label("Result")),
         }
@@ -35,13 +35,14 @@ impl Tool for JsonFormatTool {
 
     fn run(&self, i: &Inputs) -> Result<Outputs, ToolError> {
         let text = i.text("text");
-        // JSON sai cú pháp → nêu rõ dòng/cột từ serde_json, rất hữu ích cho người dùng.
+        // Malformed JSON → serde_json reports the exact line/column, which is very
+        // useful to surface to the user.
         let value: serde_json::Value = serde_json::from_str(text)
-            .map_err(|e| ToolError::invalid("text", format!("JSON không hợp lệ: {e}")))?;
+            .map_err(|e| ToolError::invalid("text", format!("invalid JSON: {e}")))?;
 
         let result = if i.choice("mode") == "minify" {
             serde_json::to_string(&value)
-                .map_err(|e| ToolError::Failed(format!("không serialize được: {e}")))?
+                .map_err(|e| ToolError::Failed(format!("failed to serialize: {e}")))?
         } else {
             let indent = i.num("indent").clamp(1, 8) as usize;
             let pad = vec![b' '; indent];
@@ -49,9 +50,9 @@ impl Tool for JsonFormatTool {
             let formatter = serde_json::ser::PrettyFormatter::with_indent(&pad);
             let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
             serde::Serialize::serialize(&value, &mut ser)
-                .map_err(|e| ToolError::Failed(format!("không serialize được: {e}")))?;
+                .map_err(|e| ToolError::Failed(format!("failed to serialize: {e}")))?;
             String::from_utf8(buf)
-                .map_err(|e| ToolError::Failed(format!("output không phải UTF-8: {e}")))?
+                .map_err(|e| ToolError::Failed(format!("output is not valid UTF-8: {e}")))?
         };
 
         Ok(Outputs::one("result", result))
@@ -101,10 +102,10 @@ mod tests {
             ToolError::InvalidInput { field: "text", msg } => {
                 assert!(
                     msg.contains("line") || msg.contains("column"),
-                    "msg nên nêu vị trí: {msg}"
+                    "msg should mention a position: {msg}"
                 );
             }
-            other => panic!("kỳ vọng InvalidInput trên `text`, nhận {other:?}"),
+            other => panic!("expected InvalidInput on `text`, got {other:?}"),
         }
     }
 }

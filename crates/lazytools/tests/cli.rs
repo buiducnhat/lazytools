@@ -1,10 +1,10 @@
-//! Test CLI end-to-end. Lưu ý về newline: stdout ở đây là pipe (không phải TTY),
-//! nên output một-giá-trị là **raw bytes, không newline** — đúng thứ pipeline cần.
+//! End-to-end CLI tests. Note on newlines: stdout here is a pipe (not a TTY),
+//! so single-value output is **raw bytes, no newline** — exactly what pipelines need.
 
 use assert_cmd::Command;
 
 fn lazytools() -> Command {
-    Command::cargo_bin("lazytools").expect("binary `lazytools` phải build được")
+    Command::cargo_bin("lazytools").expect("binary `lazytools` must build")
 }
 
 #[test]
@@ -35,10 +35,11 @@ fn hash_sha256() {
         .stdout("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
 }
 
-/// `FieldKind::Select` sinh `value_parser`, nên clap chặn giá trị lạ **trước khi**
-/// tool chạy: exit 2 (mã lỗi dùng-sai-lệnh chuẩn của clap) kèm danh sách giá trị hợp lệ.
-/// Nhánh `InvalidInput` → exit 1 của tầng tool được phủ ở P4, nơi có ca thật sự
-/// tới được `run()` (ví dụ `hex --direction decode` với input hỏng).
+/// `FieldKind::Select` generates a `value_parser`, so clap rejects an unknown value
+/// **before** the tool runs: exit 2 (clap's standard usage-error code) with the list
+/// of valid values. The `InvalidInput` → exit 1 branch of the tool layer is covered
+/// in P4, where a case actually reaches `run()` (e.g. `hex --direction decode` with
+/// malformed input).
 #[test]
 fn invalid_select_value_is_rejected_with_valid_choices() {
     let out = lazytools()
@@ -51,11 +52,11 @@ fn invalid_select_value_is_rejected_with_valid_choices() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("algo"),
-        "stderr phải nêu tên field: {stderr}"
+        "stderr must name the field: {stderr}"
     );
     assert!(
         stderr.contains("md5") && stderr.contains("sha256"),
-        "stderr phải liệt kê giá trị hợp lệ: {stderr}"
+        "stderr must list the valid values: {stderr}"
     );
 }
 
@@ -69,13 +70,10 @@ fn help_lists_subcommands_from_registry() {
         .clone();
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("hash"),
-        "--help phải liệt kê `hash`: {stdout}"
-    );
+    assert!(stdout.contains("hash"), "--help must list `hash`: {stdout}");
 }
 
-// --- Mỗi tool thêm ở P4 có ít nhất một ca, tập trung vào luồng pipe. ---
+// --- Every tool added in P4 has at least one case, focused on the pipe flow. ---
 
 #[test]
 fn base64_encode_from_stdin() {
@@ -107,8 +105,9 @@ fn hex_encode() {
         .stdout("68656c6c6f");
 }
 
-/// Nhánh `InvalidInput` → exit **1** của tầng tool, hoãn từ P1 vì lúc đó chưa
-/// có ca nào tới được `run()` (clap chặn hết ở tầng `Select`).
+/// The `InvalidInput` → exit **1** branch of the tool layer, deferred from P1 since
+/// at that point no case reached `run()` yet (clap rejected everything at the
+/// `Select` layer).
 #[test]
 fn tool_level_invalid_input_exits_1_and_names_the_field() {
     let out = lazytools()
@@ -121,7 +120,7 @@ fn tool_level_invalid_input_exits_1_and_names_the_field() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.starts_with("error: text:"),
-        "positional phải in `text:` chứ không phải `--text:`: {stderr}"
+        "the positional arg must print `text:`, not `--text:`: {stderr}"
     );
 }
 
@@ -154,7 +153,7 @@ fn bcrypt_hash_then_verify() {
         .get_output()
         .clone();
     let hash = String::from_utf8_lossy(&out.stdout).to_string();
-    assert!(hash.starts_with("$2"), "phải là chuỗi bcrypt: {hash}");
+    assert!(hash.starts_with("$2"), "must be a bcrypt string: {hash}");
 
     lazytools()
         .args(["bcrypt", "--mode", "verify", "--hash", &hash, "hunter2"])
@@ -173,7 +172,7 @@ fn json_format_minify() {
         .stdout(r#"{"a":1}"#);
 }
 
-/// Khóa phải giữ **đúng thứ tự người dùng viết**, không bị sắp lại theo bảng chữ cái.
+/// Keys must keep **exactly the order the user wrote them in**, not get resorted alphabetically.
 #[test]
 fn json_format_preserves_key_order() {
     lazytools()
@@ -194,7 +193,7 @@ fn data_format_json_to_yaml() {
         .stdout("a: 1\n");
 }
 
-/// Giới hạn thật của TOML phải thành lỗi rõ ràng, không phải output sai âm thầm.
+/// A real TOML limitation must become a clear error, not silently-wrong output.
 #[test]
 fn data_format_reports_toml_limits() {
     let out = lazytools()
@@ -208,7 +207,7 @@ fn data_format_reports_toml_limits() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("--to:"),
-        "lỗi trên option phải in kèm `--to`: {stderr}"
+        "the error on the option must include `--to`: {stderr}"
     );
 }
 
@@ -232,6 +231,9 @@ fn help_lists_all_eight_tools() {
         "json-format",
         "data-format",
     ] {
-        assert!(stdout.contains(name), "--help thiếu `{name}`:\n{stdout}");
+        assert!(
+            stdout.contains(name),
+            "--help is missing `{name}`:\n{stdout}"
+        );
     }
 }

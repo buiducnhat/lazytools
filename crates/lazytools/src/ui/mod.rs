@@ -4,7 +4,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 pub use style::{SharedTheme, Theme};
 
-/// Vùng chữ nhật căn giữa, dùng cho popup.
+/// A centered rectangular area, used for popups.
 pub fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let vertical = Layout::default()
         .direction(Direction::Vertical)

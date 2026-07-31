@@ -1,5 +1,6 @@
-//! Lưới an toàn cho toàn bộ abstraction: mọi tool trong registry đều phải thỏa
-//! các bất biến dưới đây. Viết từ P0 với 1 tool để sẵn sàng bắt lỗi khi catalog lớn dần.
+//! Safety net for the whole abstraction: every tool in the registry must satisfy
+//! the invariants below. Written back in P0 with a single tool, so it's ready to
+//! catch errors as the catalog grows.
 
 use std::collections::HashMap;
 
@@ -8,7 +9,7 @@ use lazytools_core::registry::Registry;
 use lazytools_core::spec::FieldKind;
 use lazytools_core::value::{Inputs, Value};
 
-/// Inputs dựng từ `default` của spec — thứ TUI nạp vào lúc mở tool.
+/// Inputs built from the spec's `default` — what the TUI loads when opening a tool.
 fn default_inputs(spec: &lazytools_core::spec::ToolSpec) -> Inputs {
     let mut inputs = Inputs::new();
     for f in spec.inputs.iter().chain(spec.options.iter()) {
@@ -25,7 +26,7 @@ fn tool_ids_are_unique() {
     let mut seen: HashMap<&str, ()> = HashMap::new();
     for tool in registry.all() {
         let id = tool.spec().id;
-        assert!(seen.insert(id, ()).is_none(), "id trùng: {id}");
+        assert!(seen.insert(id, ()).is_none(), "duplicate id: {id}");
     }
 }
 
@@ -38,7 +39,7 @@ fn field_keys_are_unique_within_each_tool() {
         for f in spec.all_fields() {
             assert!(
                 seen.insert(f.key, ()).is_none(),
-                "{}: field key trùng: {}",
+                "{}: duplicate field key: {}",
                 spec.id,
                 f.key
             );
@@ -63,16 +64,16 @@ fn defaults_match_field_kind() {
                 (FieldKind::Number { min, max }, Value::Num(n)) => {
                     assert!(
                         n >= min && n <= max,
-                        "{where_}: default {n} ngoài khoảng [{min}, {max}]"
+                        "{where_}: default {n} is outside range [{min}, {max}]"
                     );
                 }
                 (FieldKind::Select { options }, Value::Choice(c)) => {
                     assert!(
                         options.contains(&c.as_str()),
-                        "{where_}: default {c:?} không nằm trong {options:?}"
+                        "{where_}: default {c:?} is not among {options:?}"
                     );
                 }
-                (kind, value) => panic!("{where_}: default {value:?} không khớp kiểu {kind:?}"),
+                (kind, value) => panic!("{where_}: default {value:?} doesn't match kind {kind:?}"),
             }
         }
     }
@@ -86,22 +87,22 @@ fn ids_map_to_unique_valid_cli_names() {
         let spec = tool.spec();
         let name = spec.cli_name();
 
-        assert!(!name.is_empty(), "{}: cli_name rỗng", spec.id);
+        assert!(!name.is_empty(), "{}: cli_name is empty", spec.id);
         assert!(
             name.chars()
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
-            "{}: cli_name {name:?} chứa ký tự không hợp lệ",
+            "{}: cli_name {name:?} contains invalid characters",
             spec.id
         );
         assert!(
             !name.starts_with('-') && !name.ends_with('-'),
-            "{}: cli_name {name:?} không được bắt đầu/kết thúc bằng `-`",
+            "{}: cli_name {name:?} must not start/end with `-`",
             spec.id
         );
 
         if let Some(other) = seen.insert(name, spec.id) {
             panic!(
-                "cli_name {name:?} bị dùng bởi cả `{other}` và `{}`",
+                "cli_name {name:?} is used by both `{other}` and `{}`",
                 spec.id
             );
         }
@@ -120,16 +121,20 @@ fn declared_outputs_are_actually_produced() {
                 for f in &spec.outputs {
                     assert!(
                         outputs.get(f.key).is_some(),
-                        "{}: khai output `{}` nhưng run() không trả về",
+                        "{}: declares output `{}` but run() didn't return it",
                         spec.id,
                         f.key
                     );
                 }
             }
-            // Tool có quyền từ chối input mặc định (ví dụ cần text không rỗng),
-            // nhưng phải từ chối bằng InvalidInput chứ không phải panic hay Failed.
+            // A tool is allowed to reject the default input (e.g. it requires
+            // non-empty text), but it must reject it with InvalidInput rather
+            // than panicking or returning Failed.
             Err(ToolError::InvalidInput { .. }) => {}
-            Err(e) => panic!("{}: run() với input mặc định lỗi bất thường: {e}", spec.id),
+            Err(e) => panic!(
+                "{}: run() with default input failed unexpectedly: {e}",
+                spec.id
+            ),
         }
     }
 }

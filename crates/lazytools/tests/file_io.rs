@@ -1,5 +1,5 @@
-//! File I/O trong TUI. Các test này **ghi file thật**, nên chỉ đụng tới thư mục
-//! tạm tự tạo — không bao giờ chạm file trong repo.
+//! File I/O in the TUI. These tests **write real files**, so they only touch
+//! self-created temp directories — never files inside the repo.
 
 use std::path::PathBuf;
 
@@ -19,27 +19,27 @@ fn ctrl(code: KeyCode) -> Event {
 
 fn type_str(app: &mut App, text: &str) {
     for c in text.chars() {
-        app.event(&key(KeyCode::Char(c))).expect("gõ ký tự");
+        app.event(&key(KeyCode::Char(c))).expect("type char");
     }
 }
 
 fn screen(app: &mut App, width: u16, height: u16) -> String {
     let mut terminal =
-        Terminal::new(TestBackend::new(width, height)).expect("TestBackend phải dựng được");
+        Terminal::new(TestBackend::new(width, height)).expect("TestBackend must build");
     terminal
-        .draw(|f| app.draw(f).expect("draw không được lỗi"))
-        .expect("draw phải chạy được");
+        .draw(|f| app.draw(f).expect("draw must not fail"))
+        .expect("draw must run");
     terminal.backend().to_string()
 }
 
-/// Thư mục rác riêng cho mỗi test, xoá khi xong.
+/// Scratch directory private to each test, removed when done.
 struct TempDir(PathBuf);
 
 impl TempDir {
     fn new(name: &str) -> Self {
         let path = std::env::temp_dir().join(format!("lazytools-test-{name}"));
         std::fs::remove_dir_all(&path).ok();
-        std::fs::create_dir_all(&path).expect("tạo được thư mục tạm");
+        std::fs::create_dir_all(&path).expect("create temp dir");
         Self(path)
     }
     fn join(&self, name: &str) -> PathBuf {
@@ -53,21 +53,21 @@ impl Drop for TempDir {
     }
 }
 
-/// `Ctrl+S` mở popup lưu; nhập đường dẫn mới rồi Enter là ghi ngay (không hỏi).
+/// `Ctrl+S` opens the save popup; typing a new path then Enter writes right away (no prompt).
 #[test]
 fn saves_focused_output_to_a_new_file() {
     let dir = TempDir::new("save-new");
     let target = dir.join("out.txt");
 
     let mut app = App::new(Registry::new());
-    app.event(&key(KeyCode::Tab)).expect("vào form");
+    app.event(&key(KeyCode::Tab)).expect("enter form");
     app.process_queue().expect("queue");
     type_str(&mut app, "hello world");
     app.process_queue().expect("queue");
     std::thread::sleep(std::time::Duration::from_millis(150));
     app.tick();
 
-    // Tab tới ô Digest (output) rồi lưu.
+    // Tab to the Digest (output) field, then save.
     app.event(&key(KeyCode::Tab)).expect("tab");
     app.event(&key(KeyCode::Tab)).expect("tab");
     app.process_queue().expect("queue");
@@ -78,20 +78,20 @@ fn saves_focused_output_to_a_new_file() {
     app.event(&key(KeyCode::Enter)).expect("enter");
     app.process_queue().expect("queue");
 
-    let written = std::fs::read_to_string(&target).expect("file phải được tạo");
+    let written = std::fs::read_to_string(&target).expect("file must be created");
     assert_eq!(written, "5eb63bbbe01eeed093cb22bb8f5acdc3");
 }
 
-/// **Ghi đè luôn phải có bước xác nhận** — thao tác không thể hoàn tác duy nhất
-/// trong toàn bộ app.
+/// **Overwrite must always ask for confirmation** — the only non-undoable operation
+/// in the whole app.
 #[test]
 fn overwrite_always_asks_first() {
     let dir = TempDir::new("save-overwrite");
     let target = dir.join("exists.txt");
-    std::fs::write(&target, "NỘI DUNG CŨ").expect("tạo file sẵn có");
+    std::fs::write(&target, "OLD CONTENT").expect("create pre-existing file");
 
     let mut app = App::new(Registry::new());
-    app.event(&key(KeyCode::Tab)).expect("vào form");
+    app.event(&key(KeyCode::Tab)).expect("enter form");
     app.process_queue().expect("queue");
     type_str(&mut app, "hello world");
     app.process_queue().expect("queue");
@@ -107,24 +107,27 @@ fn overwrite_always_asks_first() {
     app.event(&key(KeyCode::Enter)).expect("enter");
     app.process_queue().expect("queue");
 
-    // Enter lần đầu chỉ mở bước xác nhận — file vẫn nguyên vẹn.
+    // The first Enter only opens the confirmation step — the file is untouched.
     let out = screen(&mut app, 100, 30);
-    assert!(out.contains("ghi đè"), "phải hỏi xác nhận:\n{out}");
+    assert!(
+        out.contains("overwrite"),
+        "must ask for confirmation:\n{out}"
+    );
     assert_eq!(
         std::fs::read_to_string(&target).unwrap(),
-        "NỘI DUNG CŨ",
-        "chưa xác nhận thì KHÔNG được ghi đè"
+        "OLD CONTENT",
+        "without confirmation it must NOT overwrite"
     );
 
-    // Esc huỷ → vẫn giữ nguyên.
+    // Esc cancels -> content stays unchanged.
     app.event(&key(KeyCode::Esc)).expect("esc");
     app.process_queue().expect("queue");
-    assert_eq!(std::fs::read_to_string(&target).unwrap(), "NỘI DUNG CŨ");
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "OLD CONTENT");
 
-    // Enter → vào lại xác nhận, Enter nữa → mới thật sự ghi.
+    // Enter -> back into confirmation, another Enter -> now it actually writes.
     app.event(&key(KeyCode::Enter)).expect("enter");
     app.process_queue().expect("queue");
-    app.event(&key(KeyCode::Enter)).expect("xác nhận");
+    app.event(&key(KeyCode::Enter)).expect("confirm");
     app.process_queue().expect("queue");
     assert_eq!(
         std::fs::read_to_string(&target).unwrap(),
@@ -132,15 +135,15 @@ fn overwrite_always_asks_first() {
     );
 }
 
-/// Thư mục cha không tồn tại → báo lỗi, **không** tự tạo thư mục.
+/// Missing parent directory -> reports an error, **without** creating the directory.
 #[test]
 fn missing_parent_directory_errors_without_creating_it() {
     let dir = TempDir::new("save-noparent");
-    let missing = dir.join("khong-ton-tai");
+    let missing = dir.join("does-not-exist");
     let target = missing.join("out.txt");
 
     let mut app = App::new(Registry::new());
-    app.event(&key(KeyCode::Tab)).expect("vào form");
+    app.event(&key(KeyCode::Tab)).expect("enter form");
     app.process_queue().expect("queue");
     app.event(&key(KeyCode::Tab)).expect("tab");
     app.event(&key(KeyCode::Tab)).expect("tab");
@@ -152,27 +155,34 @@ fn missing_parent_directory_errors_without_creating_it() {
     app.process_queue().expect("queue");
 
     let out = screen(&mut app, 100, 30);
-    assert!(out.contains("không tồn tại"), "phải báo lỗi rõ:\n{out}");
-    assert!(!missing.exists(), "KHÔNG được tự tạo thư mục cha");
+    assert!(
+        out.contains("does not exist"),
+        "must report a clear error:\n{out}"
+    );
+    assert!(
+        !missing.exists(),
+        "must NOT auto-create the parent directory"
+    );
     assert!(!target.exists());
 }
 
-/// `Ctrl+O` mở picker, chọn file → nội dung nạp vào input chính và tool chạy lại.
+/// `Ctrl+O` opens the picker; choosing a file loads its content into the primary
+/// input and reruns the tool.
 #[test]
 fn opens_a_file_into_the_primary_input() {
     let dir = TempDir::new("open-file");
     let file = dir.join("input.txt");
-    std::fs::write(&file, "hello world").expect("ghi file mẫu");
+    std::fs::write(&file, "hello world").expect("write sample file");
 
     let mut app = App::new(Registry::new());
-    // Đi đường tắt qua queue thay vì mô phỏng điều hướng thư mục —
-    // phần duyệt thư mục đã được popup lo, ở đây kiểm luồng nạp vào form.
+    // Shortcut through the queue instead of simulating directory navigation —
+    // directory browsing is the popup's job; here we check the load-into-form flow.
     app.event(&ctrl(KeyCode::Char('o'))).expect("ctrl+o");
     app.process_queue().expect("queue");
     let out = screen(&mut app, 100, 30);
-    assert!(out.contains("Mở file"), "picker phải mở:\n{out}");
+    assert!(out.contains("Open file"), "picker must open:\n{out}");
 
-    // Đóng picker để overlay không che form khi kiểm kết quả.
+    // Close the picker so the overlay doesn't hide the form when checking results.
     app.event(&key(KeyCode::Esc)).expect("esc");
     app.process_queue().expect("queue");
 
@@ -184,21 +194,21 @@ fn opens_a_file_into_the_primary_input() {
     let out = screen(&mut app, 100, 30);
     assert!(
         out.contains("hello world"),
-        "nội dung file phải vào input:\n{out}"
+        "file content must land in the input:\n{out}"
     );
     assert!(
         out.contains("5eb63bbbe01eeed093cb22bb8f5acdc3"),
-        "tool phải chạy lại trên nội dung mới:\n{out}"
+        "the tool must rerun on the new content:\n{out}"
     );
 }
 
-/// File quá lớn bị từ chối kèm thông báo, không treo và không nạp.
+/// A file over the size limit is rejected with a message — no hang, no load.
 #[test]
 fn rejects_files_over_the_size_limit() {
     let dir = TempDir::new("open-toobig");
     let file = dir.join("big.txt");
     let limit = lazytools::popups::file_open::MAX_FILE_BYTES as usize;
-    std::fs::write(&file, "a".repeat(limit + 1)).expect("ghi file lớn");
+    std::fs::write(&file, "a".repeat(limit + 1)).expect("write large file");
 
     let meta = std::fs::metadata(&file).unwrap();
     assert!(meta.len() > lazytools::popups::file_open::MAX_FILE_BYTES);
@@ -208,15 +218,18 @@ fn rejects_files_over_the_size_limit() {
     app.process_queue().expect("queue");
 
     let rejected = lazytools::popups::file_open::check_openable(&file);
-    assert!(rejected.is_err(), "file quá lớn phải bị từ chối");
+    assert!(rejected.is_err(), "an oversized file must be rejected");
     let msg = rejected.unwrap_err();
     assert!(
-        msg.contains("giới hạn"),
-        "thông báo phải nêu giới hạn: {msg}"
+        msg.contains("limit"),
+        "the message must state the limit: {msg}"
     );
 
-    // Và đi qua App thì cũng không nạp vào form, chỉ hiện lỗi.
+    // And going through App, it also doesn't load into the form — just shows the error.
     app.open_file(&file);
     let out = screen(&mut app, 100, 30);
-    assert!(out.contains("giới hạn"), "phải hiện lý do từ chối:\n{out}");
+    assert!(
+        out.contains("limit"),
+        "must show the rejection reason:\n{out}"
+    );
 }

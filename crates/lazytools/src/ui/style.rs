@@ -68,7 +68,7 @@ impl Theme {
             .add_modifier(Modifier::BOLD)
     }
 
-    /// Tiêu đề nhóm trong sidebar.
+    /// Group heading in the sidebar.
     pub fn group(&self) -> Style {
         Style::default().fg(self.title).add_modifier(Modifier::BOLD)
     }

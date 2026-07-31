@@ -11,7 +11,7 @@ fn main() -> ExitCode {
         return cli::run(&registry, args);
     }
 
-    // TUI đọc keys.toml của người dùng; CLI thì không cần.
+    // The TUI reads the user's keys.toml; the CLI doesn't need it.
     match tui::run_with_user_config(registry) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

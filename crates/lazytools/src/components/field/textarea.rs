@@ -1,26 +1,26 @@
-//! TextArea tự viết — `tui-textarea 0.7` chỉ hỗ trợ `ratatui ^0.29`.
+//! Hand-rolled TextArea — `tui-textarea 0.7` only supports `ratatui ^0.29`.
 //!
-//! **Phạm vi cố tình giới hạn:** insert / xóa / di chuyển con trỏ / bracketed
-//! paste / soft wrap + scroll dọc. **Không** undo/redo, **không** selection,
-//! **không** tìm kiếm. Người dùng paste rồi xem kết quả chứ không soạn thảo nặng
-//! ở đây; mở rộng phạm vi là cách nhanh nhất làm phase này trượt lịch.
+//! **Scope is deliberately limited:** insert / delete / cursor movement / bracketed
+//! paste / soft wrap + vertical scroll. **No** undo/redo, **no** selection,
+//! **no** search. Users paste and look at the result rather than doing heavy editing
+//! here; expanding the scope is the fastest way to make this phase slip its schedule.
 
 use std::cell::Cell;
 
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-/// Một dòng hiển thị sau khi soft wrap: `(chỉ số dòng logic, grapheme bắt đầu, kết thúc)`.
+/// A displayed row after soft wrap: `(logical line index, start grapheme, end grapheme)`.
 type VisualRow = (usize, usize, usize);
 
 #[derive(Debug, Clone)]
 pub struct TextArea {
     lines: Vec<String>,
-    /// Con trỏ tính theo **grapheme cluster**, không phải byte.
+    /// Cursor is counted in **grapheme clusters**, not bytes.
     cursor_line: usize,
     cursor_col: usize,
-    /// `Cell` để `render()` cập nhật được scroll mà vẫn giữ `draw(&self)`
-    /// của `DrawableComponent`.
+    /// `Cell` so `render()` can update scroll while still keeping `draw(&self)`
+    /// from `DrawableComponent`.
     scroll: Cell<usize>,
     single_line: bool,
 }
@@ -29,7 +29,7 @@ fn graphemes(s: &str) -> Vec<&str> {
     s.graphemes(true).collect()
 }
 
-/// Vị trí byte của grapheme thứ `n` — dùng để cắt chuỗi mà không vỡ UTF-8.
+/// Byte position of the `n`th grapheme — used to slice the string without breaking UTF-8.
 fn byte_at(s: &str, n: usize) -> usize {
     s.grapheme_indices(true)
         .nth(n)
@@ -80,7 +80,7 @@ impl TextArea {
         self.cursor_col = self.cursor_col.min(self.line_len(self.cursor_line));
     }
 
-    // ---- soạn thảo ----
+    // ---- editing ----
 
     pub fn insert_char(&mut self, c: char) {
         if c == '\n' {
@@ -103,7 +103,7 @@ impl TextArea {
         self.cursor_col = 0;
     }
 
-    /// Bracketed paste — đường vào chính của dữ liệu, quan trọng hơn soạn thảo.
+    /// Bracketed paste — the main data entry path, more important than editing.
     pub fn insert_str(&mut self, text: &str) {
         if self.single_line {
             let flat = text.replace(['\n', '\r'], " ");
@@ -168,14 +168,14 @@ impl TextArea {
         }
     }
 
-    /// Ctrl+U — xóa từ đầu dòng tới con trỏ.
+    /// Ctrl+U — delete from the start of the line to the cursor.
     pub fn delete_to_line_start(&mut self) {
         let end = byte_at(&self.lines[self.cursor_line], self.cursor_col);
         self.lines[self.cursor_line].replace_range(..end, "");
         self.cursor_col = 0;
     }
 
-    // ---- di chuyển ----
+    // ---- movement ----
 
     pub fn move_left(&mut self) {
         if self.cursor_col > 0 {
@@ -219,7 +219,7 @@ impl TextArea {
 
     // ---- soft wrap + scroll ----
 
-    /// Cắt từng dòng logic thành các dòng hiển thị vừa `width` cột.
+    /// Splits each logical line into displayed rows that fit `width` columns.
     fn visual_rows(&self, width: usize) -> Vec<VisualRow> {
         let width = width.max(1);
         let mut out = Vec::new();
@@ -236,7 +236,7 @@ impl TextArea {
                 let mut end = start;
                 while end < gs.len() {
                     let gw = UnicodeWidthStr::width(gs[end]).max(1);
-                    // Luôn nhận ít nhất một grapheme để vòng lặp chắc chắn tiến.
+                    // Always take at least one grapheme so the loop is guaranteed to progress.
                     if w + gw > width && end > start {
                         break;
                     }
@@ -261,17 +261,17 @@ impl TextArea {
                 return i;
             }
         }
-        // Con trỏ ở cuối dòng: nằm trên dòng hiển thị cuối cùng của dòng logic đó.
+        // Cursor at the end of the line: sits on the last displayed row of that logical line.
         last_of_line
     }
 
-    /// Nội dung để render cùng vị trí con trỏ `(cột, dòng)` tính theo ô hiển thị.
+    /// Content to render along with the cursor position `(col, row)` in display cells.
     pub fn render(&self, width: u16, height: u16) -> (Vec<String>, (u16, u16)) {
         let rows = self.visual_rows(width as usize);
         let cursor_row = self.cursor_row(&rows);
         let height = (height as usize).max(1);
 
-        // Cuộn vừa đủ để con trỏ nằm trong khung.
+        // Scroll just enough so the cursor stays within the viewport.
         let mut scroll = self.scroll.get();
         if cursor_row < scroll {
             scroll = cursor_row;
@@ -308,14 +308,14 @@ mod tests {
     #[test]
     fn cursor_moves_by_grapheme_not_byte() {
         let mut ta = TextArea::new(false);
-        // "à" tổ hợp (a + U+0300) là một grapheme gồm nhiều byte.
-        ta.set_value("a\u{0300}xin chào");
+        // "à" (a + U+0300) is a combining grapheme made of multiple bytes.
+        ta.set_value("a\u{0300}hello");
         ta.move_line_start();
         ta.move_right();
-        // Sau một lần sang phải, con trỏ đã qua trọn cụm "à".
+        // After moving right once, the cursor has passed the entire "à" cluster.
         assert_eq!(ta.cursor_col, 1);
         ta.backspace();
-        assert_eq!(ta.value(), "xin chào");
+        assert_eq!(ta.value(), "hello");
     }
 
     #[test]
@@ -323,8 +323,8 @@ mod tests {
         let mut ta = TextArea::new(false);
         ta.set_value("👨‍👩‍👧‍👦!");
         ta.move_line_end();
-        ta.backspace(); // xóa "!"
-        ta.backspace(); // xóa trọn cụm emoji gia đình
+        ta.backspace(); // delete "!"
+        ta.backspace(); // delete the whole family emoji cluster
         assert_eq!(ta.value(), "");
     }
 
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn wide_chars_respect_display_width() {
         let mut ta = TextArea::new(false);
-        // Mỗi chữ Hán rộng 2 cột → chỉ 2 chữ vừa một dòng rộng 4.
+        // Each Han character is 2 columns wide → only 2 characters fit on a 4-wide line.
         ta.set_value("漢字漢字");
         let (rows, _) = ta.render(4, 10);
         assert_eq!(rows, vec!["漢字", "漢字"]);
@@ -391,6 +391,6 @@ mod tests {
         ta.cursor_line = 4;
         let (rows, cursor) = ta.render(10, 2);
         assert_eq!(rows, vec!["4", "5"]);
-        assert_eq!(cursor.1, 1, "con trỏ phải nằm trong khung nhìn");
+        assert_eq!(cursor.1, 1, "cursor must stay within the viewport");
     }
 }

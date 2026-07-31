@@ -3,8 +3,8 @@ pub mod crypto;
 
 use crate::registry::Tool;
 
-/// Liệt kê tường minh — cố tình không dùng `inventory` hay macro tự-đăng-ký.
-/// Thêm một tool = thêm đúng một dòng ở đây.
+/// Explicit listing — deliberately not using `inventory` or a self-registering macro.
+/// Adding a tool means adding exactly one line here.
 pub(crate) fn register_all() -> Vec<Box<dyn Tool>> {
     vec![
         Box::new(crypto::hash::HashTool::default()),

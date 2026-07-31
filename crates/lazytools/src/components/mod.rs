@@ -1,5 +1,5 @@
-//! Hai trait cốt lõi, mượn hình dạng từ gitui. Mọi thứ vẽ được là
-//! `DrawableComponent`; mọi thứ nhận phím và tự khai báo lệnh là `Component`.
+//! Two core traits, shaped after gitui. Anything that can be drawn is a
+//! `DrawableComponent`; anything that receives keys and declares its own commands is a `Component`.
 
 pub mod cmdbar;
 pub mod field;
@@ -30,19 +30,19 @@ impl EventState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandBlocking {
-    /// Component đang chiếm phím — không hỏi các component sau nữa.
+    /// The component is currently claiming keys — don't ask the following components anymore.
     Blocking,
     PassingOn,
 }
 
-/// Một lệnh mà component công bố. cmdbar và help popup đều dựng từ đây, nên
-/// hint hiển thị không bao giờ lệch với code xử lý phím thật.
+/// A command a component advertises. Both the cmdbar and the help popup are built
+/// from this, so the displayed hint never drifts from the actual key-handling code.
 #[derive(Debug, Clone)]
 pub struct CommandInfo {
-    /// Chuỗi phím đã render sẵn, ví dụ `^P` — luôn lấy từ `KeyConfig`.
+    /// Pre-rendered key string, e.g. `^P` — always taken from `KeyConfig`.
     pub key: String,
     pub label: &'static str,
-    /// Nhóm trong help popup — help popup được dựng ở Phase 03.
+    /// Group shown in the help popup — the help popup was built in Phase 03.
     pub group: &'static str,
     pub enabled: bool,
     pub order: i8,
@@ -75,13 +75,13 @@ pub trait Component {
         true
     }
     fn hide(&mut self) {}
-    /// Dùng bởi các popup mở theo yêu cầu (palette/help ở P3, file picker ở P5).
+    /// Used by popups that open on demand (palette/help in P3, the file picker in P5).
     fn show(&mut self) -> Result<()> {
         Ok(())
     }
 }
 
-/// Đưa event lần lượt qua các component, dừng ở component đầu tiên tiêu thụ nó.
+/// Passes an event through the components in turn, stopping at the first one that consumes it.
 pub fn event_pump(ev: &Event, components: &mut [&mut dyn Component]) -> Result<EventState> {
     for c in components.iter_mut() {
         if c.event(ev)?.is_consumed() {
@@ -91,7 +91,7 @@ pub fn event_pump(ev: &Event, components: &mut [&mut dyn Component]) -> Result<E
     Ok(EventState::NotConsumed)
 }
 
-/// Gom `CommandInfo` của các component đang hiển thị, dừng ở component `Blocking`.
+/// Collects `CommandInfo` from the currently visible components, stopping at a `Blocking` component.
 pub fn command_pump(out: &mut Vec<CommandInfo>, force_all: bool, components: &[&dyn Component]) {
     for c in components {
         if !c.is_visible() && !force_all {

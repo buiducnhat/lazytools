@@ -1,5 +1,5 @@
-//! Thân của `lazytools` nằm ở lib target để `tests/` chạm được vào `App` và các
-//! component — integration test không import được từ binary crate.
+//! The body of `lazytools` lives in the lib target so `tests/` can reach `App` and
+//! the components — integration tests can't import from a binary crate.
 
 pub mod app;
 pub mod cli;

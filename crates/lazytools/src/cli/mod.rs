@@ -1,5 +1,5 @@
-//! CLI sinh hoàn toàn từ `Registry`. Không có tên tool nào được viết ra ở đây —
-//! thêm tool mới không cần chạm file này.
+//! CLI generated entirely from `Registry`. No tool name is hardcoded here —
+//! adding a new tool doesn't need to touch this file.
 
 use std::ffi::OsString;
 use std::io::{IsTerminal, Read, Write};
@@ -12,7 +12,7 @@ use lazytools_core::registry::Registry;
 use lazytools_core::spec::{Field, FieldKind, ToolSpec};
 use lazytools_core::value::{Inputs, Outputs, Value};
 
-/// Tên flag dài của một field: `url_safe` → `--url-safe`.
+/// Long flag name for a field: `url_safe` → `--url-safe`.
 fn flag_name(key: &str) -> String {
     key.replace('_', "-")
 }
@@ -20,13 +20,13 @@ fn flag_name(key: &str) -> String {
 pub fn build_command(registry: &Registry) -> Command {
     let mut cmd = Command::new("lazytools")
         .version(env!("CARGO_PKG_VERSION"))
-        .about("Bộ tiện ích chạy trong terminal — chạy không tham số để mở TUI")
+        .about("A terminal utility toolbox — run with no arguments to open the TUI")
         .arg(
             Arg::new("json")
                 .long("json")
                 .action(ArgAction::SetTrue)
                 .global(true)
-                .help("In toàn bộ output dạng JSON"),
+                .help("Print the entire output as JSON"),
         );
 
     for tool in registry.all() {
@@ -42,7 +42,7 @@ fn build_subcommand(spec: &ToolSpec) -> Command {
         let arg = Arg::new(f.key)
             .value_name(f.key.to_uppercase())
             .required(false)
-            .help(f.help.unwrap_or("`-` hoặc bỏ trống để đọc từ stdin"));
+            .help(f.help.unwrap_or("`-` or leave empty to read from stdin"));
         sub = sub.arg(apply_kind(arg, f));
     }
 
@@ -67,12 +67,12 @@ fn apply_kind(arg: Arg, f: &Field) -> Arg {
         FieldKind::Text { .. } | FieldKind::Secret | FieldKind::FilePath { .. } => arg,
     };
 
-    // Toggle dùng `SetTrue`, đã ngầm mặc định `false` — thêm `default_value` sẽ xung đột.
+    // Toggle uses `SetTrue`, which already implicitly defaults to `false` — adding `default_value` would conflict.
     match (&f.default, &f.kind) {
         (Some(v), FieldKind::Toggle) => {
             debug_assert!(
                 v == &Value::Bool(false),
-                "Toggle mặc định `true` chưa được hỗ trợ ở CLI"
+                "Toggle defaulting to `true` isn't supported in the CLI yet"
             );
             arg
         }
@@ -81,17 +81,18 @@ fn apply_kind(arg: Arg, f: &Field) -> Arg {
     }
 }
 
-/// Lỗi ở tầng CLI, tách khỏi `ToolError` vì cách trình bày khác nhau.
+/// CLI-layer error, separate from `ToolError` because the presentation differs.
 enum CliError {
-    /// Lỗi dùng sai lệnh — nói rõ thiếu gì.
+    /// Usage error — states clearly what's missing.
     Usage(String),
     Tool(ToolError),
     Io(std::io::Error),
 }
 
 impl CliError {
-    /// `InvalidInput` mang tên field: định vị về đúng positional hoặc đúng flag.
-    /// Đây là lý do biến thể đó tách riêng trong `ToolError`.
+    /// `InvalidInput` carries the field name: it can be pinpointed to the right
+    /// positional argument or the right flag. This is why that variant is kept
+    /// separate in `ToolError`.
     fn render(&self, spec: &ToolSpec) -> String {
         match self {
             Self::Usage(msg) => msg.clone(),
@@ -115,13 +116,13 @@ impl From<std::io::Error> for CliError {
     }
 }
 
-/// Đọc toàn bộ stdin. Chỉ gọi khi stdin **không** phải TTY — nếu là TTY thì
-/// người dùng chỉ đơn giản quên đối số, và treo chờ nhập là lỗi UX kinh điển.
+/// Reads all of stdin. Only called when stdin is **not** a TTY — if it is a TTY,
+/// the user simply forgot the argument, and hanging waiting for input is a classic UX bug.
 fn read_stdin(key: &str) -> Result<String, CliError> {
     let mut stdin = std::io::stdin();
     if stdin.is_terminal() {
         return Err(CliError::Usage(format!(
-            "thiếu đối số `{key}` — truyền trực tiếp hoặc pipe qua stdin"
+            "missing argument `{key}` — pass it directly or pipe it through stdin"
         )));
     }
     let mut buf = String::new();
@@ -146,14 +147,14 @@ fn collect_inputs(spec: &ToolSpec, m: &ArgMatches) -> Result<Inputs, CliError> {
 
     for f in &spec.inputs {
         let value = match value_of(f, m) {
-            // Giá trị tường minh — kể cả chuỗi rỗng, đó là input hợp lệ.
+            // Explicit value — even an empty string, that's valid input.
             Some(Value::Text(s)) if s != "-" => Value::Text(s),
             Some(v @ (Value::Num(_) | Value::Bool(_) | Value::Choice(_))) => v,
-            // Thiếu hẳn, hoặc `-`: cả hai đều nghĩa là "lấy từ stdin".
+            // Missing entirely, or `-`: both mean "read from stdin".
             _ => {
                 if stdin_taken {
                     return Err(CliError::Usage(format!(
-                        "chỉ một input được đọc từ stdin; `{}` cần giá trị tường minh",
+                        "only one input can be read from stdin; `{}` needs an explicit value",
                         f.key
                     )));
                 }
@@ -184,8 +185,8 @@ fn print_outputs(spec: &ToolSpec, outputs: &Outputs, as_json: bool) -> std::io::
             .collect();
         writeln!(out, "{}", serde_json::Value::Object(map))?;
     } else if spec.outputs.len() == 1 {
-        // Đúng một output → in raw, không nhãn. Pipe-friendly là mục tiêu chính.
-        // Newline chỉ thêm khi ra TTY, để bytes trên pipe khớp chính xác giá trị.
+        // Exactly one output → print raw, unlabeled. Pipe-friendliness is the main goal.
+        // Newline is only added when writing to a TTY, so bytes on a pipe match the value exactly.
         let value = spec.outputs.first().and_then(|f| outputs.get(f.key));
         let text = value.map(Value::as_display).unwrap_or_default();
         if out.is_terminal() {
@@ -218,7 +219,7 @@ where
     T: Into<OsString> + Clone,
 {
     let mut cmd = build_command(registry);
-    // clap tự xử lý `--help` / `--version` / lỗi cú pháp rồi thoát với exit code riêng.
+    // clap handles `--help` / `--version` / syntax errors itself and exits with its own exit code.
     let matches = cmd.clone().get_matches_from(args);
 
     let Some((name, sub_m)) = matches.subcommand() else {
@@ -227,7 +228,7 @@ where
     };
 
     let Some(tool) = registry.all().find(|t| t.spec().cli_name() == name) else {
-        eprintln!("error: không có tool nào tên `{name}`");
+        eprintln!("error: no tool named `{name}`");
         return ExitCode::from(1);
     };
     let spec = tool.spec();

@@ -1,13 +1,14 @@
-//! Copy ra clipboard hệ thống.
+//! Copy to the system clipboard.
 //!
-//! Thất bại (thường gặp khi chạy qua SSH: không có clipboard server) phải được
-//! **báo rõ**, không panic và không im lặng. Fallback OSC52 đã chốt hoãn v0.2.
+//! Failure (common when running over SSH: no clipboard server) must be
+//! **reported clearly**, no panic, no silent failure. OSC52 fallback has been deferred to v0.2.
 
-/// Trả về `Err` kèm lý do đọc được cho người dùng.
+/// Returns `Err` with a reason the user can read.
 pub fn copy(text: &str) -> Result<(), String> {
-    let mut clipboard = arboard::Clipboard::new()
-        .map_err(|e| format!("không mở được clipboard: {e}\nQua SSH thì thường là không có."))?;
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| {
+        format!("couldn't open clipboard: {e}\nOver SSH there's usually none available.")
+    })?;
     clipboard
         .set_text(text.to_owned())
-        .map_err(|e| format!("không ghi được vào clipboard: {e}"))
+        .map_err(|e| format!("couldn't write to clipboard: {e}"))
 }

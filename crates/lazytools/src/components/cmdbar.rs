@@ -7,8 +7,8 @@ use ratatui::widgets::Paragraph;
 use super::{CommandInfo, DrawableComponent};
 use crate::ui::SharedTheme;
 
-/// Thanh hint một dòng. Nội dung đến từ `commands()` của các component đang hiển
-/// thị, nên không bao giờ lỗi thời so với code xử lý phím.
+/// A single-line hint bar. Content comes from `commands()` of the currently visible
+/// components, so it's never out of date compared to the key-handling code.
 pub struct CommandBar {
     cmds: Vec<CommandInfo>,
     theme: SharedTheme,

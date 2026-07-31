@@ -11,8 +11,8 @@ use crate::components::EventState;
 use crate::keys::{KeyConfig, key_match, typed_char};
 use crate::ui::SharedTheme;
 
-/// Số nguyên có biên. Giá trị luôn được kẹp vào `[min, max]` ngay tại chỗ nhập,
-/// nên tool không bao giờ nhận số ngoài khoảng đã khai trong spec.
+/// Bounded integer. The value is always clamped into `[min, max]` right at input time,
+/// so the tool never receives a number outside the range declared in the spec.
 pub struct NumberWidget {
     key: &'static str,
     label: &'static str,
@@ -108,7 +108,7 @@ impl FieldWidget for NumberWidget {
             self.set_clamped(self.value / 10);
         } else if let Some(c) = typed_char(k).filter(char::is_ascii_digit) {
             let digit = i64::from(c as u8 - b'0');
-            // Nhập ngoài khoảng bị chặn tại chỗ thay vì báo lỗi sau.
+            // Input outside the range is blocked right there instead of erroring later.
             let candidate = self.value.saturating_mul(10).saturating_add(digit);
             self.set_clamped(candidate);
         } else {

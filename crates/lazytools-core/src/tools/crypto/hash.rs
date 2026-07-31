@@ -17,7 +17,7 @@ impl Default for HashTool {
     fn default() -> Self {
         Self {
             spec: ToolSpec::new("crypto.hash", "Hash Text", Category::Crypto)
-                .describe("Băm văn bản bằng MD5/SHA")
+                .describe("Hash text using MD5/SHA")
                 .keywords(&[
                     "md5", "sha", "sha1", "sha256", "sha512", "checksum", "digest",
                 ])
@@ -47,7 +47,7 @@ impl Tool for HashTool {
             other => {
                 return Err(ToolError::invalid(
                     "algo",
-                    format!("thuật toán không hỗ trợ: {other}"),
+                    format!("unsupported algorithm: {other}"),
                 ));
             }
         };
@@ -82,7 +82,7 @@ mod tests {
         ];
 
         for (text, algo, expected) in cases {
-            let out = run(text, algo).expect("hash phải chạy được");
+            let out = run(text, algo).expect("hash must run successfully");
             assert_eq!(
                 out.get("digest").unwrap().as_display(),
                 expected,
@@ -93,10 +93,10 @@ mod tests {
 
     #[test]
     fn unknown_algo_is_invalid_input() {
-        let err = run("hello", "bogus").expect_err("algo lạ phải trả lỗi");
+        let err = run("hello", "bogus").expect_err("an unknown algo must return an error");
         assert!(
             matches!(err, ToolError::InvalidInput { field: "algo", .. }),
-            "kỳ vọng InvalidInput trên field `algo`, nhận: {err:?}"
+            "expected InvalidInput on field `algo`, got: {err:?}"
         );
     }
 }

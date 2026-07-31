@@ -17,7 +17,7 @@ impl Default for HmacTool {
     fn default() -> Self {
         Self {
             spec: ToolSpec::new("crypto.hmac", "HMAC", Category::Crypto)
-                .describe("Tính HMAC của văn bản với một khóa bí mật")
+                .describe("Compute the HMAC of text with a secret key")
                 .keywords(&["hmac", "sha", "sign", "mac", "signature", "key"])
                 .input(Field::text("text").multiline().label("Input"))
                 .option(
@@ -31,15 +31,15 @@ impl Default for HmacTool {
     }
 }
 
-/// Gói lặp lại cho từng thuật toán — `Hmac<D>` là kiểu khác nhau nên không
-/// gộp chung vào một biến được.
+/// Repeated wrapper for each algorithm — `Hmac<D>` is a different type per
+/// algorithm, so they can't be merged into a single variable.
 fn mac<D>(key: &[u8], msg: &[u8]) -> String
 where
     D: hmac::EagerHash,
     Hmac<D>: Mac + hmac::digest::KeyInit,
 {
-    let mut mac =
-        <Hmac<D> as hmac::digest::KeyInit>::new_from_slice(key).expect("HMAC nhận khóa dài tùy ý");
+    let mut mac = <Hmac<D> as hmac::digest::KeyInit>::new_from_slice(key)
+        .expect("HMAC accepts a key of any length");
     mac.update(msg);
     hex::encode(mac.finalize().into_bytes())
 }
@@ -52,7 +52,7 @@ impl Tool for HmacTool {
     fn run(&self, i: &Inputs) -> Result<Outputs, ToolError> {
         let key = i.text("key");
         if key.is_empty() {
-            return Err(ToolError::invalid("key", "khóa không được để trống"));
+            return Err(ToolError::invalid("key", "key must not be empty"));
         }
         let (key, msg) = (key.as_bytes(), i.text("text").as_bytes());
 
@@ -63,7 +63,7 @@ impl Tool for HmacTool {
             other => {
                 return Err(ToolError::invalid(
                     "algo",
-                    format!("thuật toán không hỗ trợ: {other}"),
+                    format!("unsupported algorithm: {other}"),
                 ));
             }
         };
@@ -84,7 +84,7 @@ mod tests {
         )
     }
 
-    /// Vector từ RFC 2202 / RFC 4231, key = "key", msg = "The quick brown fox jumps over the lazy dog".
+    /// Vectors from RFC 2202 / RFC 4231, key = "key", msg = "The quick brown fox jumps over the lazy dog".
     #[test]
     fn known_vectors() {
         let msg = "The quick brown fox jumps over the lazy dog";

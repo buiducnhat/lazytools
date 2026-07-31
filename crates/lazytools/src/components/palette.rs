@@ -1,8 +1,9 @@
-//! Fuzzy finder mở bằng `Ctrl+P`. Khớp trên `name + keywords + description`.
+//! Fuzzy finder opened with `Ctrl+P`. Matches on `name + keywords + description`.
 //!
-//! Dùng `nucleo::pattern::Pattern` (một lần chấm điểm) thay vì `nucleo::Nucleo`
-//! (worker đa luồng, tăng dần): catalog chỉ vài chục tool và nằm sẵn trong bộ
-//! nhớ, nên máy chấm điểm là đủ còn tầng worker chỉ là chi phí thừa.
+//! Uses `nucleo::pattern::Pattern` (single-shot scoring) instead of `nucleo::Nucleo`
+//! (multi-threaded, incremental worker): the catalog is only a few dozen tools and
+//! already sits in memory, so the plain scorer is enough and the worker layer would
+//! just be overhead.
 
 use anyhow::Result;
 use lazytools_core::registry::Registry;
@@ -20,7 +21,7 @@ use crate::keys::{KeyConfig, key_match, typed_char};
 use crate::queue::{InternalEvent, Queue};
 use crate::ui::{SharedTheme, centered_rect};
 
-/// Một mục có thể chọn — `haystack` gộp sẵn để không phải nối chuỗi mỗi lần gõ.
+/// A selectable entry — `haystack` is pre-joined so we don't concatenate strings on every keystroke.
 struct Entry {
     id: &'static str,
     name: &'static str,
@@ -30,7 +31,7 @@ struct Entry {
 
 pub struct Palette {
     entries: Vec<Entry>,
-    /// Chỉ số vào `entries`, đã lọc và sắp theo điểm.
+    /// Indices into `entries`, filtered and sorted by score.
     filtered: Vec<usize>,
     selected: usize,
     input: TextArea,
@@ -104,7 +105,7 @@ impl Palette {
             })
             .collect();
 
-        // Điểm cao lên trước; hòa điểm thì giữ thứ tự registry cho ổn định.
+        // Highest score first; ties keep registry order for stability.
         scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
         self.filtered = scored.into_iter().map(|(_, i)| i).collect();
         self.selected = 0;
@@ -136,7 +137,7 @@ impl DrawableComponent for Palette {
         let block = Block::bordered()
             .border_style(self.theme.block(true))
             .title_style(self.theme.title(true))
-            .title(" Tìm tool ");
+            .title(" Find tool ");
         let inner = block.inner(area);
         f.render_widget(block, area);
 
@@ -179,8 +180,8 @@ impl DrawableComponent for Palette {
 
 impl Component for Palette {
     fn commands(&self, out: &mut Vec<CommandInfo>, force_all: bool) -> CommandBlocking {
-        // Lệnh *mở* palette là affordance cấp app (`App::app_commands`);
-        // ở đây chỉ công bố các lệnh dùng được khi palette đang mở.
+        // The command to *open* the palette is an app-level affordance (`App::app_commands`);
+        // here we only advertise the commands usable while the palette is open.
         if self.visible || force_all {
             let keys = &self.key_config.keys;
             out.push(
@@ -190,13 +191,13 @@ impl Component for Palette {
                         self.key_config.hint(keys.move_down_alt),
                         self.key_config.hint(keys.move_up_alt)
                     ),
-                    "chọn",
+                    "select",
                     "Palette",
                 )
                 .order(10),
             );
             out.push(
-                CommandInfo::new(self.key_config.hint(keys.confirm), "mở tool", "Palette")
+                CommandInfo::new(self.key_config.hint(keys.confirm), "open tool", "Palette")
                     .order(11),
             );
         }
@@ -244,7 +245,7 @@ impl Component for Palette {
             self.input.insert_char(c);
             self.refilter();
         }
-        // Palette đang mở thì nuốt mọi phím.
+        // While the palette is open, it swallows every keypress.
         Ok(EventState::Consumed)
     }
 

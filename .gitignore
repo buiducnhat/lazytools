@@ -1,8 +1,32 @@
+# Cobrew
 docs/.brainstorms
 docs/.plans
 
+# Rust
 /target
 **/*.rs.bk
+*.pdb
 /release
-.DS_Store
+
+# insta snapshot review artifacts (accepted .snap files are committed)
+*.snap.new
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Editors / IDEs
 /.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -18,7 +18,7 @@ use crate::popups::{FileOpenPopup, FileSavePopup, HelpPopup, MsgPopup};
 use crate::queue::{InternalEvent, NeedsUpdate, Queue};
 use crate::ui::{SharedTheme, Theme};
 
-/// Ngưỡng responsive: dưới 80 cols sidebar thu còn icon; dưới 60 ẩn hẳn.
+/// Responsive breakpoints: below 80 cols the sidebar shrinks to icons; below 60 it's hidden entirely.
 const SIDEBAR_WIDTH: u16 = 24;
 const SIDEBAR_WIDTH_NARROW: u16 = 6;
 const BREAKPOINT_NARROW: u16 = 80;
@@ -46,18 +46,18 @@ pub struct App {
     focus: Focus,
     should_quit: bool,
     needs_redraw: bool,
-    /// Thông báo thoáng qua ở cmdbar (ví dụ "đã copy").
+    /// Transient message in the cmdbar (e.g. "copied").
     flash: Option<String>,
 }
 
 impl App {
-    /// Dùng phím mặc định — cho test và cho trường hợp không có HOME.
+    /// Uses default keys — for tests and for cases where there's no HOME.
     pub fn new(registry: Registry) -> Self {
         Self::with_key_config(registry, KeyConfig::default(), None)
     }
 
-    /// Đọc `~/.config/lazytools/keys.toml`. Config hỏng **không** chặn khởi
-    /// động: app vẫn mở, kèm popup nói rõ vấn đề để người dùng vào sửa được.
+    /// Reads `~/.config/lazytools/keys.toml`. A broken config does **not** block
+    /// startup: the app still opens, with a popup explaining the issue so the user can go fix it.
     pub fn from_user_config(registry: Registry) -> Self {
         let (key_config, issue) = KeyConfig::load();
         Self::with_key_config(registry, key_config, issue.map(|i| i.message()))
@@ -74,7 +74,7 @@ impl App {
         let sidebar = Sidebar::new(&registry, queue.clone(), theme.clone(), key_config);
         let mut tool_form = ToolFormComponent::new(queue.clone(), theme.clone(), key_config);
 
-        // Mở sẵn tool đầu tiên để màn hình đầu không trống.
+        // Open the first tool by default so the initial screen isn't empty.
         if let Some(tool) = sidebar.selected_tool().and_then(|id| registry.get(id)) {
             tool_form.set_tool(tool.spec());
         }
@@ -154,7 +154,7 @@ impl App {
             None => self.cmdbar.draw(f, cmdbar_area)?,
         }
 
-        // Overlay vẽ sau cùng để nằm trên mọi thứ.
+        // Overlays draw last so they sit on top of everything.
         self.palette.draw(f, area)?;
         self.help_popup.draw(f, area)?;
         self.file_open.draw(f, area)?;
@@ -163,7 +163,7 @@ impl App {
         Ok(())
     }
 
-    /// Khung của tool đang mở; ruột do `ToolFormComponent` tự dựng từ `ToolSpec`.
+    /// Frame of the currently open tool; the interior is built by `ToolFormComponent` from the `ToolSpec`.
     fn draw_workspace(&self, f: &mut Frame, rect: Rect) -> Result<()> {
         let focused = self.focus == Focus::Workspace;
         let name = self
@@ -202,7 +202,7 @@ impl App {
         self.cmdbar.set_cmds(cmds);
     }
 
-    /// Toàn bộ lệnh, kể cả của component đang ẩn — nội dung cho help popup.
+    /// All commands, including those from hidden components — content for the help popup.
     fn all_commands(&self) -> Vec<CommandInfo> {
         let mut cmds = Vec::new();
         command_pump(&mut cmds, true, &self.components());
@@ -210,14 +210,14 @@ impl App {
         cmds
     }
 
-    /// Lệnh cấp app — luôn lấy chuỗi phím từ `KeyConfig`.
+    /// App-level commands — always takes the key string from `KeyConfig`.
     fn app_commands(&self) -> Vec<CommandInfo> {
         let keys = &self.key_config.keys;
         let mut cmds = Vec::new();
-        // Trong form, `Tab` đã được công bố là "field kế" — không hiện trùng phím.
+        // In the form, `Tab` is already advertised as "next field" — don't show a duplicate key.
         if self.focus == Focus::Sidebar {
             cmds.push(
-                CommandInfo::new(self.key_config.hint(keys.focus_next), "đổi vùng", "App")
+                CommandInfo::new(self.key_config.hint(keys.focus_next), "switch pane", "App")
                     .order(50),
             );
         }
@@ -226,25 +226,26 @@ impl App {
             cmds.push(CommandInfo::new(self.key_config.hint(keys.copy), "copy", "App").order(58));
         }
         cmds.push(
-            CommandInfo::new(self.key_config.hint(keys.open_file), "mở file", "App").order(56),
+            CommandInfo::new(self.key_config.hint(keys.open_file), "open file", "App").order(56),
         );
         if self.focus == Focus::Workspace {
             cmds.push(
-                CommandInfo::new(self.key_config.hint(keys.save_file), "lưu file", "App").order(57),
+                CommandInfo::new(self.key_config.hint(keys.save_file), "save file", "App")
+                    .order(57),
             );
         }
-        cmds.push(CommandInfo::new(self.key_config.hint(keys.help), "trợ giúp", "App").order(60));
-        cmds.push(CommandInfo::new(self.key_config.hint(keys.quit), "thoát", "App").order(99));
+        cmds.push(CommandInfo::new(self.key_config.hint(keys.help), "help", "App").order(60));
+        cmds.push(CommandInfo::new(self.key_config.hint(keys.quit), "quit", "App").order(99));
         cmds
     }
 
     pub fn event(&mut self, ev: &Event) -> Result<()> {
         self.needs_redraw = true;
-        // Thông báo thoáng qua biến mất ở thao tác kế tiếp.
+        // The transient message disappears on the next action.
         self.flash = None;
 
-        // Thứ tự định tuyến: popups → palette → pane đang focus.
-        // Mọi component tự trả `NotConsumed` khi không được focus/hiển thị.
+        // Routing order: popups → palette → the focused pane.
+        // Every component returns `NotConsumed` on its own when not focused/visible.
         let mut components: Vec<&mut dyn Component> = vec![
             &mut self.msg_popup,
             &mut self.help_popup,
@@ -292,7 +293,7 @@ impl App {
         self.tool_form.set_focused(self.focus == Focus::Workspace);
     }
 
-    /// Rút cạn queue. Trả về cờ cho biết cần cập nhật những gì.
+    /// Drains the queue. Returns flags indicating what needs updating.
     pub fn process_queue(&mut self) -> Result<NeedsUpdate> {
         let mut flags = NeedsUpdate::empty();
         while let Some(ev) = self.queue.pop() {
@@ -329,16 +330,16 @@ impl App {
                     flags |= NeedsUpdate::ALL;
                 }
                 InternalEvent::ShowHelp => {
-                    // Nội dung sinh từ `commands()` ngay lúc mở, không phải danh sách cứng.
+                    // Content generated from `commands()` right when opening, not a hardcoded list.
                     let cmds = self.all_commands();
                     self.help_popup.set_cmds(cmds);
                     self.help_popup.show()?;
                     flags |= NeedsUpdate::ALL;
                 }
                 InternalEvent::CopyToClipboard(text) => {
-                    // Thất bại phải nói rõ lý do, không panic và không im lặng.
+                    // Failure must state the reason clearly — no panic, no silent failure.
                     match clipboard::copy(&text) {
-                        Ok(()) => self.flash = Some("đã copy".to_string()),
+                        Ok(()) => self.flash = Some("copied".to_string()),
                         Err(e) => self.msg_popup.show_error(e),
                     }
                     flags |= NeedsUpdate::ALL;
@@ -357,10 +358,10 @@ impl App {
         Ok(flags)
     }
 
-    /// Nạp nội dung file vào input chính của tool đang mở.
+    /// Loads a file's content into the currently open tool's primary input.
     ///
-    /// Đọc file là việc của **tầng UI** — tool vẫn chỉ nhận/trả text thuần, nhờ
-    /// vậy `run()` còn test được mà không cần filesystem.
+    /// Reading the file is the **UI layer's** job — the tool still only receives/returns
+    /// plain text, which is why `run()` remains testable without a filesystem.
     pub fn open_file(&mut self, path: &std::path::Path) {
         if let Err(msg) = crate::popups::file_open::check_openable(path) {
             self.msg_popup.show_error(msg);
@@ -370,13 +371,14 @@ impl App {
             Ok(text) => self.tool_form.set_primary_input(&text),
             Err(e) => self
                 .msg_popup
-                .show_error(format!("không đọc được {}: {e}", path.display())),
+                .show_error(format!("couldn't read {}: {e}", path.display())),
         }
         self.needs_redraw = true;
     }
 
-    /// Chạy tool khi tới hạn debounce. Gọi mỗi vòng lặp — vì `event::poll` có
-    /// timeout nên output tự cập nhật sau khi ngừng gõ, không cần bấm thêm phím.
+    /// Runs the tool once the debounce deadline is reached. Called every loop iteration —
+    /// because `event::poll` has a timeout, the output updates automatically after typing
+    /// stops, with no extra keypress needed.
     pub fn tick(&mut self) {
         if !self.tool_form.take_run_request() {
             return;

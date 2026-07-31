@@ -8,7 +8,8 @@ use crate::components::{CommandBlocking, CommandInfo, Component, DrawableCompone
 use crate::keys::{KeyConfig, key_match};
 use crate::ui::{SharedTheme, centered_rect};
 
-/// Popup thông báo / lỗi. Cần sớm vì `catch_unwind` ở tầng core phải có chỗ hiện.
+/// Message / error popup. Needed early because `catch_unwind` at the core layer
+/// needs somewhere to display.
 pub struct MsgPopup {
     title: &'static str,
     body: String,
@@ -31,14 +32,14 @@ impl MsgPopup {
     }
 
     pub fn show_msg(&mut self, body: String) {
-        self.title = " Thông báo ";
+        self.title = " Message ";
         self.body = body;
         self.is_error = false;
         self.visible = true;
     }
 
     pub fn show_error(&mut self, body: String) {
-        self.title = " Lỗi ";
+        self.title = " Error ";
         self.body = body;
         self.is_error = true;
         self.visible = true;
@@ -78,7 +79,7 @@ impl Component for MsgPopup {
         if self.visible || force_all {
             out.push(CommandInfo::new(
                 self.key_config.hint(self.key_config.keys.exit_popup),
-                "đóng",
+                "close",
                 "Popup",
             ));
         }
@@ -99,7 +100,8 @@ impl Component for MsgPopup {
                 self.hide();
             }
         }
-        // Popup đang mở thì nuốt mọi phím — không để lọt xuống pane bên dưới.
+        // While the popup is open it swallows every key — nothing leaks through
+        // to the pane underneath.
         Ok(EventState::Consumed)
     }
 

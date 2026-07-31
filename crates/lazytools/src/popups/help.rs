@@ -1,6 +1,6 @@
-//! Help popup. Nội dung **sinh từ `commands()`** của các component đang hiển
-//! thị, không phải danh sách viết tay — cùng lý do với cmdbar: help không bao
-//! giờ lệch với phím thật.
+//! Help popup. Its content is **generated from the `commands()`** of the
+//! currently visible components, not a hand-written list — same reason as the
+//! cmdbar: help never drifts from the real key bindings.
 
 use anyhow::Result;
 use ratatui::Frame;
@@ -30,7 +30,7 @@ impl HelpPopup {
         }
     }
 
-    /// `App` nạp vào toàn bộ lệnh (`force_all`) ngay trước khi mở.
+    /// `App` loads in the full command list (`force_all`) right before opening.
     pub fn set_cmds(&mut self, mut cmds: Vec<CommandInfo>) {
         cmds.sort_by(|a, b| a.group.cmp(b.group).then(a.order.cmp(&b.order)));
         cmds.dedup_by(|a, b| a.group == b.group && a.key == b.key && a.label == b.label);
@@ -70,7 +70,7 @@ impl DrawableComponent for HelpPopup {
                 Block::bordered()
                     .border_style(self.theme.block(true))
                     .title_style(self.theme.title(true))
-                    .title(" Phím tắt "),
+                    .title(" Shortcuts "),
             ),
             area,
         );
@@ -80,12 +80,13 @@ impl DrawableComponent for HelpPopup {
 
 impl Component for HelpPopup {
     fn commands(&self, out: &mut Vec<CommandInfo>, force_all: bool) -> CommandBlocking {
-        // Lệnh *mở* help là affordance cấp app; ở đây chỉ có lệnh đóng.
+        // The command that *opens* help is an app-level affordance; only the close
+        // command lives here.
         if self.visible {
             out.push(
                 CommandInfo::new(
                     self.key_config.hint(self.key_config.keys.exit_popup),
-                    "đóng",
+                    "close",
                     "Popup",
                 )
                 .order(1),

@@ -1,8 +1,9 @@
-//! Lưu giá trị output đang focus ra file.
+//! Saves the focused output value to a file.
 //!
-//! Ghi đè file của người dùng là thao tác **không thể hoàn tác** — chỗ duy nhất
-//! có tính chất đó trong toàn plan — nên bước xác nhận là bắt buộc, không phải
-//! tùy chọn. Thư mục cha không tồn tại thì **báo lỗi**, không tự tạo.
+//! Overwriting the user's file is an **irreversible** action — the only place in
+//! the whole plan with that property — so the confirmation step is mandatory,
+//! not optional. A missing parent directory is **reported as an error**, not
+//! created automatically.
 
 use std::path::{Path, PathBuf};
 
@@ -21,7 +22,7 @@ use crate::ui::{SharedTheme, centered_rect};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
     EnteringPath,
-    /// File đã tồn tại — phải trả lời trước khi ghi.
+    /// File already exists — must be answered before writing.
     ConfirmOverwrite,
 }
 
@@ -50,7 +51,7 @@ impl FileSavePopup {
         }
     }
 
-    /// Mở popup cho một nội dung cụ thể.
+    /// Opens the popup for a specific piece of content.
     pub fn open_with(&mut self, content: String) {
         self.content = content;
         self.path_input.set_value("");
@@ -63,19 +64,21 @@ impl FileSavePopup {
         PathBuf::from(self.path_input.value().trim())
     }
 
-    /// Kiểm tra rồi hoặc ghi luôn, hoặc chuyển sang bước xác nhận ghi đè.
+    /// Validates, then either writes right away or moves to the overwrite
+    /// confirmation step.
     fn submit(&mut self) {
         let path = self.target();
         if path.as_os_str().is_empty() {
-            self.error = Some("hãy nhập đường dẫn".to_string());
+            self.error = Some("please enter a path".to_string());
             return;
         }
 
-        // Thư mục cha phải có sẵn — không tự tạo thay người dùng.
+        // The parent directory must already exist — we don't create it on the
+        // user's behalf.
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty())
             && !parent.is_dir()
         {
-            self.error = Some(format!("thư mục {} không tồn tại", parent.display()));
+            self.error = Some(format!("directory {} does not exist", parent.display()));
             return;
         }
 
@@ -91,11 +94,11 @@ impl FileSavePopup {
         match std::fs::write(path, &self.content) {
             Ok(()) => {
                 self.queue
-                    .push(InternalEvent::ShowMsg(format!("đã lưu {}", path.display())));
+                    .push(InternalEvent::ShowMsg(format!("saved {}", path.display())));
                 self.hide();
             }
             Err(e) => {
-                self.error = Some(format!("không ghi được: {e}"));
+                self.error = Some(format!("could not write: {e}"));
                 self.stage = Stage::EnteringPath;
             }
         }
@@ -113,11 +116,12 @@ impl DrawableComponent for FileSavePopup {
         let block = Block::bordered()
             .border_style(self.theme.block(true))
             .title_style(self.theme.title(true))
-            .title(" Lưu ra file ");
+            .title(" Save to file ");
         let inner = block.inner(area);
         f.render_widget(block, area);
 
-        // Vùng thông báo phải nhiều dòng: đường dẫn dài làm lỗi bị cắt mất chữ.
+        // The message area must span multiple lines: a long path would otherwise
+        // truncate the error text.
         let rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Min(1)])
@@ -136,7 +140,7 @@ impl DrawableComponent for FileSavePopup {
             Stage::ConfirmOverwrite => {
                 f.render_widget(
                     Paragraph::new(format!(
-                        "file đã tồn tại — ghi đè? {} để xác nhận, {} để hủy",
+                        "file already exists — overwrite? {} to confirm, {} to cancel",
                         self.key_config.hint(self.key_config.keys.confirm),
                         self.key_config.hint(self.key_config.keys.exit_popup)
                     ))
@@ -164,13 +168,13 @@ impl Component for FileSavePopup {
         if self.visible {
             let keys = &self.key_config.keys;
             let label = if self.stage == Stage::ConfirmOverwrite {
-                "ghi đè"
+                "overwrite"
             } else {
-                "lưu"
+                "save"
             };
             out.push(CommandInfo::new(self.key_config.hint(keys.confirm), label, "File").order(1));
             out.push(
-                CommandInfo::new(self.key_config.hint(keys.exit_popup), "hủy", "File").order(3),
+                CommandInfo::new(self.key_config.hint(keys.exit_popup), "cancel", "File").order(3),
             );
             return CommandBlocking::Blocking;
         }
@@ -200,7 +204,8 @@ impl Component for FileSavePopup {
                     let path = self.target();
                     self.write(&path);
                 } else if key_match(k, b.exit_popup) {
-                    // Hủy đưa về bước nhập, không đóng hẳn — người dùng còn sửa được.
+                    // Cancel goes back to the input step rather than closing outright —
+                    // the user can still edit it.
                     self.stage = Stage::EnteringPath;
                 }
             }

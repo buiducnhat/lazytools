@@ -103,7 +103,7 @@ impl FieldWidget for TextWidget {
             return Ok(EventState::NotConsumed);
         }
 
-        // Bracketed paste: cả khối vào một lần, không bị nhận nhầm thành phím rời.
+        // Bracketed paste: the whole block lands in one go, not mistaken for individual keypresses.
         if let Event::Paste(text) = ev {
             self.area.insert_str(text);
             return Ok(EventState::Consumed);

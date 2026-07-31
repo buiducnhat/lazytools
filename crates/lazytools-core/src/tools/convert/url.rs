@@ -13,7 +13,7 @@ impl Default for UrlTool {
     fn default() -> Self {
         Self {
             spec: ToolSpec::new("convert.url", "URL Encode", Category::Convert)
-                .describe("Percent-encode / decode chuỗi URL")
+                .describe("Percent-encode / decode a URL string")
                 .keywords(&["url", "percent", "escape", "uri", "encode", "decode"])
                 .input(Field::text("text").multiline().label("Input"))
                 .option(
@@ -26,9 +26,10 @@ impl Default for UrlTool {
     }
 }
 
-/// `urlencoding::decode` chỉ báo lỗi khi kết quả không phải UTF-8 — chuỗi
-/// percent hỏng như `%ZZ` bị nó cho đi qua nguyên văn. Với một tool decode thì
-/// im lặng như vậy là bẫy: người dùng tưởng đã decode xong. Kiểm trước.
+/// `urlencoding::decode` only reports an error when the result isn't UTF-8 —
+/// a malformed percent sequence like `%ZZ` is passed through verbatim. For a
+/// decode tool, that silence is a trap: the user thinks decoding succeeded.
+/// Check up front instead.
 fn check_percent_sequences(text: &str) -> Result<(), ToolError> {
     let bytes = text.as_bytes();
     let mut i = 0;
@@ -42,7 +43,9 @@ fn check_percent_sequences(text: &str) -> Result<(), ToolError> {
         if !valid {
             return Err(ToolError::invalid(
                 "text",
-                format!("chuỗi percent hỏng ở vị trí {i}: `%` phải kèm đúng 2 chữ số hex"),
+                format!(
+                    "malformed percent sequence at position {i}: `%` must be followed by exactly 2 hex digits"
+                ),
             ));
         }
         i += 3;
@@ -64,7 +67,7 @@ impl Tool for UrlTool {
                     .map_err(|e| {
                         ToolError::invalid(
                             "text",
-                            format!("giải mã ra bytes không phải UTF-8: {e}"),
+                            format!("decoded bytes are not valid UTF-8: {e}"),
                         )
                     })?
                     .into_owned()
@@ -100,7 +103,7 @@ mod tests {
         let cases = [
             ("hello world", "hello%20world"),
             ("a+b=c&d", "a%2Bb%3Dc%26d"),
-            ("xin chào", "xin%20ch%C3%A0o"),
+            ("good bye!", "good%20bye%21"),
         ];
         for (plain, encoded) in cases {
             assert_eq!(ok(plain, "encode"), encoded, "encode {plain:?}");

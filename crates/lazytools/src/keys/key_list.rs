@@ -1,5 +1,5 @@
-//! Mọi phím của app sống ở đây, không rải rác trong logic component.
-//! Đọc từ TOML được thêm ở Phase 03; 2A chỉ cần struct + `Default`.
+//! Every key binding in the app lives here, not scattered through component logic.
+//! TOML loading was added in Phase 03; 2A only needed the struct + `Default`.
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -30,7 +30,7 @@ pub struct KeysList {
     pub open_file: KeyEvent,
     pub save_file: KeyEvent,
 
-    // Soạn thảo trong TextArea.
+    // Editing within TextArea.
     pub backspace: KeyEvent,
     pub delete: KeyEvent,
     pub line_start: KeyEvent,
@@ -56,8 +56,8 @@ impl Default for KeysList {
             palette: ctrl(KeyCode::Char('p')),
             help: key(KeyCode::Char('?')),
             copy: key(KeyCode::Char('y')),
-            // Ctrl chứ không phải `o`/`s` trần: ô nhập text tiêu thụ ký tự
-            // thường trước, nên phím trần sẽ vô dụng ngay khi đang gõ.
+            // Ctrl rather than a bare `o`/`s`: a text input field consumes plain
+            // characters first, so a bare key would be useless while typing.
             open_file: ctrl(KeyCode::Char('o')),
             save_file: ctrl(KeyCode::Char('s')),
 

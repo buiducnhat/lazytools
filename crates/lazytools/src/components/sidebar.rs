@@ -12,8 +12,8 @@ use crate::keys::{KeyConfig, key_match};
 use crate::queue::{InternalEvent, Queue};
 use crate::ui::SharedTheme;
 
-/// Danh sách phẳng có tiêu đề nhóm. `id`/`name` của tool đều là `&'static str`
-/// nên sidebar không cần mượn `Registry` sau lúc dựng.
+/// A flat list with group headers. A tool's `id`/`name` are both `&'static str`,
+/// so the sidebar doesn't need to borrow `Registry` after construction.
 enum Row {
     Header(&'static str),
     Tool {
@@ -22,7 +22,7 @@ enum Row {
     },
 }
 
-/// Ký tự đầu tiên — cắt theo `char` chứ không theo byte để không panic với UTF-8.
+/// First character — sliced by `char`, not by byte, so it doesn't panic on UTF-8.
 fn first_char(s: &str) -> String {
     s.chars().next().map(String::from).unwrap_or_default()
 }
@@ -73,7 +73,7 @@ impl Sidebar {
         }
     }
 
-    /// Tool đang chọn — `App` dùng để nạp form lúc khởi động.
+    /// The currently selected tool — `App` uses this to load the form at startup.
     pub fn selected_tool(&self) -> Option<&'static str> {
         match self.rows.get(self.selected) {
             Some(Row::Tool { id, .. }) => Some(id),
@@ -81,7 +81,7 @@ impl Sidebar {
         }
     }
 
-    /// Di chuyển tới dòng tool kế tiếp theo hướng `delta`, bỏ qua tiêu đề nhóm.
+    /// Moves to the next tool row in the direction of `delta`, skipping group headers.
     fn move_selection(&mut self, delta: isize) {
         let mut idx = self.selected as isize;
         loop {
@@ -102,7 +102,7 @@ impl Sidebar {
 
 impl DrawableComponent for Sidebar {
     fn draw(&self, f: &mut Frame, rect: Rect) -> Result<()> {
-        // Dưới 60 cols sidebar bị ẩn hẳn, `App` truyền rect rỗng.
+        // Below 60 cols the sidebar is hidden entirely, `App` passes an empty rect.
         if rect.width == 0 {
             return Ok(());
         }
@@ -158,7 +158,7 @@ impl Component for Sidebar {
                         self.key_config.hint(keys.move_down),
                         self.key_config.hint(keys.move_up)
                     ),
-                    "chọn tool",
+                    "select tool",
                     "Sidebar",
                 )
                 .order(1),

@@ -10,22 +10,22 @@ use ratatui::crossterm::execute;
 
 use crate::app::App;
 
-/// Nhịp poll. Có timeout chứ không `read()` chặn vô hạn, để debounce của
-/// Phase 2B kích hoạt được mà không cần người dùng bấm thêm phím.
+/// Poll interval. Uses a timeout rather than blocking indefinitely on `read()`,
+/// so Phase 2B's debounce can fire without the user pressing another key.
 const TICK: Duration = Duration::from_millis(16);
 
-/// Chạy TUI với phím mặc định.
+/// Runs the TUI with default key bindings.
 pub fn run(registry: Registry) -> Result<()> {
     run_with(App::new(registry))
 }
 
-/// Chạy TUI với phím đọc từ `~/.config/lazytools/keys.toml`.
+/// Runs the TUI with key bindings read from `~/.config/lazytools/keys.toml`.
 pub fn run_with_user_config(registry: Registry) -> Result<()> {
     run_with(App::from_user_config(registry))
 }
 
 fn run_with(app: App) -> Result<()> {
-    // `ratatui::init()` đã tự cài panic hook khôi phục terminal.
+    // `ratatui::init()` already installs a panic hook that restores the terminal.
     let mut terminal = ratatui::init();
     execute!(stdout(), EnableBracketedPaste)?;
 
@@ -52,7 +52,7 @@ fn run_loop(terminal: &mut ratatui::DefaultTerminal, mut app: App) -> Result<()>
 
         if event::poll(TICK)? {
             let ev = event::read()?;
-            // Windows gửi cả Press lẫn Release; chỉ xử lý Press để không nhân đôi.
+            // Windows sends both Press and Release; only handle Press to avoid duplicates.
             let skip = matches!(&ev, Event::Key(k) if k.kind != KeyEventKind::Press);
             if !skip {
                 app.event(&ev)?;

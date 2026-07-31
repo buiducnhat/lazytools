@@ -15,8 +15,8 @@ sha1 = "0.11"
 sha2 = "0.11"
 hex = "0.4"
 
-# feature `string`: cho phép tên arg / default_value dựng lúc chạy từ registry.
-# Không dùng `derive` — subcommand sinh động nên toàn bộ là builder API.
+# feature `string`: allows arg names / default_value to be built at runtime from the registry.
+# Not using `derive` — subcommands are generated dynamically, so it's all builder API.
 hmac = "0.13"
 bcrypt = "0.19"
 base64 = "0.23"
@@ -26,15 +26,15 @@ urlencoding = "2"
 
 clap = { version = "4.6", features = ["string"] }
 anyhow = "1.0"
-# `preserve_order`: giữ nguyên thứ tự khóa của người dùng. Không có nó,
-# `serde_json::Map` là BTreeMap và tool format sẽ **sắp xếp lại khóa** của
-# người ta một cách âm thầm — với tool định dạng thì đó là lỗi, không phải chi tiết.
+# `preserve_order`: keeps the user's key order. Without it, `serde_json::Map` is a
+# BTreeMap and the format tool would **silently reorder** the user's keys — for a
+# formatting tool, that's a bug, not a detail.
 serde_json = { version = "1.0", features = ["preserve_order"] }
 
 ratatui = "0.30"
 bitflags = "2"
 nucleo = "0.5"
-# default-features tắt: bỏ `image-data` (kéo theo `image`/`tiff`) — chỉ copy text.
+# default-features off: drops `image-data` (which pulls in `image`/`tiff`) — text-only copy.
 arboard = { version = "3.6", default-features = false }
 toml = "1.1"
 serde = { version = "1.0", features = ["derive"] }

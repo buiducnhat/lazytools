@@ -1,8 +1,9 @@
-//! JSON ⇄ YAML ⇄ TOML ⇄ CSV, dùng `serde_json::Value` làm dạng trung gian.
+//! JSON ⇄ YAML ⇄ TOML ⇄ CSV, using `serde_json::Value` as the intermediate form.
 //!
-//! Mỗi định dạng có giới hạn thật sự khác nhau. Nguyên tắc ở đây: **báo lỗi rõ
-//! ràng thay vì sinh output sai âm thầm** — một file cấu hình bị chuyển sai mà
-//! không ai biết thì tệ hơn nhiều so với một thông báo lỗi.
+//! Each format has genuinely different limitations. The principle here is:
+//! **report a clear error instead of silently producing wrong output** — a
+//! config file that gets silently mis-converted is far worse than an error
+//! message.
 
 use serde_json::{Map, Value as Json};
 
@@ -21,7 +22,7 @@ impl Default for DataFormatTool {
     fn default() -> Self {
         Self {
             spec: ToolSpec::new("convert.data-format", "Data Format", Category::Convert)
-                .describe("Chuyển đổi giữa JSON, YAML, TOML và CSV")
+                .describe("Convert between JSON, YAML, TOML, and CSV")
                 .keywords(&["json", "yaml", "toml", "csv", "convert", "data"])
                 .input(Field::text("text").multiline().label("Input"))
                 .option(Field::select("from", FORMATS).default("json").label("From"))
@@ -35,29 +36,28 @@ fn parse(text: &str, format: &str) -> Result<Json, ToolError> {
     let bad = |e: String| ToolError::invalid("text", e);
 
     match format {
-        "json" => serde_json::from_str(text).map_err(|e| bad(format!("JSON không hợp lệ: {e}"))),
-        "yaml" => serde_yaml_ng::from_str(text).map_err(|e| bad(format!("YAML không hợp lệ: {e}"))),
-        "toml" => toml::from_str(text).map_err(|e| bad(format!("TOML không hợp lệ: {e}"))),
+        "json" => serde_json::from_str(text).map_err(|e| bad(format!("invalid JSON: {e}"))),
+        "yaml" => serde_yaml_ng::from_str(text).map_err(|e| bad(format!("invalid YAML: {e}"))),
+        "toml" => toml::from_str(text).map_err(|e| bad(format!("invalid TOML: {e}"))),
         "csv" => parse_csv(text),
         other => Err(ToolError::invalid(
             "from",
-            format!("định dạng không hỗ trợ: {other}"),
+            format!("unsupported format: {other}"),
         )),
     }
 }
 
-/// CSV → mảng các object, khóa lấy từ dòng header.
+/// CSV → array of objects, with keys taken from the header row.
 fn parse_csv(text: &str) -> Result<Json, ToolError> {
     let mut reader = csv::Reader::from_reader(text.as_bytes());
     let headers = reader
         .headers()
-        .map_err(|e| ToolError::invalid("text", format!("CSV không hợp lệ: {e}")))?
+        .map_err(|e| ToolError::invalid("text", format!("invalid CSV: {e}")))?
         .clone();
 
     let mut rows = Vec::new();
     for record in reader.records() {
-        let record =
-            record.map_err(|e| ToolError::invalid("text", format!("CSV không hợp lệ: {e}")))?;
+        let record = record.map_err(|e| ToolError::invalid("text", format!("invalid CSV: {e}")))?;
         let obj: Map<String, Json> = headers
             .iter()
             .zip(record.iter())
@@ -71,34 +71,34 @@ fn parse_csv(text: &str) -> Result<Json, ToolError> {
 fn render(value: &Json, format: &str) -> Result<String, ToolError> {
     match format {
         "json" => serde_json::to_string_pretty(value)
-            .map_err(|e| ToolError::Failed(format!("không sinh được JSON: {e}"))),
+            .map_err(|e| ToolError::Failed(format!("failed to produce JSON: {e}"))),
         "yaml" => serde_yaml_ng::to_string(value)
-            .map_err(|e| ToolError::Failed(format!("không sinh được YAML: {e}"))),
+            .map_err(|e| ToolError::Failed(format!("failed to produce YAML: {e}"))),
         "toml" => render_toml(value),
         "csv" => render_csv(value),
         other => Err(ToolError::invalid(
             "to",
-            format!("định dạng không hỗ trợ: {other}"),
+            format!("unsupported format: {other}"),
         )),
     }
 }
 
-/// TOML không có `null` và không cho giá trị vô hướng ở gốc.
+/// TOML has no `null` and doesn't allow a scalar value at the root.
 fn render_toml(value: &Json) -> Result<String, ToolError> {
     if !value.is_object() {
         return Err(ToolError::invalid(
             "to",
-            "TOML chỉ biểu diễn được bảng ở gốc — dữ liệu này có gốc là mảng hoặc giá trị đơn",
+            "TOML can only represent a table at the root — this data has an array or a scalar value at the root",
         ));
     }
     if contains_null(value) {
         return Err(ToolError::invalid(
             "to",
-            "TOML không có khái niệm `null`; hãy bỏ hoặc thay các giá trị null trước",
+            "TOML has no concept of `null`; remove or replace the null values first",
         ));
     }
     toml::to_string_pretty(value)
-        .map_err(|e| ToolError::invalid("to", format!("không biểu diễn được bằng TOML: {e}")))
+        .map_err(|e| ToolError::invalid("to", format!("cannot be represented as TOML: {e}")))
 }
 
 fn contains_null(value: &Json) -> bool {
@@ -110,12 +110,12 @@ fn contains_null(value: &Json) -> bool {
     }
 }
 
-/// CSV chỉ biểu diễn được mảng các object phẳng.
+/// CSV can only represent a flat array of objects.
 fn render_csv(value: &Json) -> Result<String, ToolError> {
     let rows = value.as_array().ok_or_else(|| {
         ToolError::invalid(
             "to",
-            "CSV cần dữ liệu là một mảng các object — dữ liệu này không phải mảng",
+            "CSV requires the data to be an array of objects — this data isn't an array",
         )
     })?;
 
@@ -123,32 +123,32 @@ fn render_csv(value: &Json) -> Result<String, ToolError> {
         return Ok(String::new());
     }
 
-    let first = rows[0]
-        .as_object()
-        .ok_or_else(|| ToolError::invalid("to", "CSV cần mỗi phần tử của mảng là một object"))?;
+    let first = rows[0].as_object().ok_or_else(|| {
+        ToolError::invalid("to", "CSV requires each array element to be an object")
+    })?;
     let headers: Vec<String> = first.keys().cloned().collect();
 
     let mut writer = csv::Writer::from_writer(Vec::new());
     writer
         .write_record(&headers)
-        .map_err(|e| ToolError::Failed(format!("không ghi được CSV: {e}")))?;
+        .map_err(|e| ToolError::Failed(format!("failed to write CSV: {e}")))?;
 
     for (idx, row) in rows.iter().enumerate() {
-        let obj = row.as_object().ok_or_else(|| {
-            ToolError::invalid("to", format!("phần tử thứ {idx} không phải object"))
-        })?;
+        let obj = row
+            .as_object()
+            .ok_or_else(|| ToolError::invalid("to", format!("element {idx} is not an object")))?;
         let mut record = Vec::with_capacity(headers.len());
         for key in &headers {
             let cell = obj.get(key).unwrap_or(&Json::Null);
             record.push(match cell {
                 Json::Null => String::new(),
                 Json::String(s) => s.clone(),
-                // Object/mảng lồng nhau không có ô CSV nào chứa nổi — nói thẳng.
+                // A nested object/array has no CSV cell that can hold it — say so plainly.
                 Json::Array(_) | Json::Object(_) => {
                     return Err(ToolError::invalid(
                         "to",
                         format!(
-                            "CSV chỉ chứa được object phẳng; khóa `{key}` ở phần tử {idx} là giá trị lồng nhau"
+                            "CSV can only hold flat objects; key `{key}` in element {idx} is a nested value"
                         ),
                     ));
                 }
@@ -157,13 +157,13 @@ fn render_csv(value: &Json) -> Result<String, ToolError> {
         }
         writer
             .write_record(&record)
-            .map_err(|e| ToolError::Failed(format!("không ghi được CSV: {e}")))?;
+            .map_err(|e| ToolError::Failed(format!("failed to write CSV: {e}")))?;
     }
 
     let bytes = writer
         .into_inner()
-        .map_err(|e| ToolError::Failed(format!("không ghi được CSV: {e}")))?;
-    String::from_utf8(bytes).map_err(|e| ToolError::Failed(format!("CSV không phải UTF-8: {e}")))
+        .map_err(|e| ToolError::Failed(format!("failed to write CSV: {e}")))?;
+    String::from_utf8(bytes).map_err(|e| ToolError::Failed(format!("CSV is not valid UTF-8: {e}")))
 }
 
 impl Tool for DataFormatTool {
@@ -172,7 +172,7 @@ impl Tool for DataFormatTool {
     }
 
     fn run(&self, i: &Inputs) -> Result<Outputs, ToolError> {
-        // `from == to` vẫn hợp lệ: hoạt động như normalize/format lại.
+        // `from == to` is still valid: it acts as a normalize/reformat pass.
         let value = parse(i.text("text"), i.choice("from"))?;
         let result = render(&value, i.choice("to"))?;
         Ok(Outputs::one("result", result))
@@ -240,16 +240,16 @@ mod tests {
         assert_eq!(ok("{ \"a\" : 1 }", "json", "json"), "{\n  \"a\": 1\n}");
     }
 
-    // --- giới hạn thật của từng định dạng: phải báo lỗi rõ, không sinh output sai ---
+    // --- real limitations of each format: must report a clear error, never wrong output ---
 
     #[test]
     fn toml_rejects_array_at_root() {
         let err = run("[1,2]", "json", "toml").unwrap_err();
         match err {
             ToolError::InvalidInput { field: "to", msg } => {
-                assert!(msg.contains("gốc"), "msg phải giải thích lý do: {msg}");
+                assert!(msg.contains("root"), "msg should explain why: {msg}");
             }
-            other => panic!("kỳ vọng InvalidInput trên `to`, nhận {other:?}"),
+            other => panic!("expected InvalidInput on `to`, got {other:?}"),
         }
     }
 
@@ -258,9 +258,9 @@ mod tests {
         let err = run(r#"{"a":null}"#, "json", "toml").unwrap_err();
         match err {
             ToolError::InvalidInput { field: "to", msg } => {
-                assert!(msg.contains("null"), "msg phải nhắc tới null: {msg}");
+                assert!(msg.contains("null"), "msg should mention null: {msg}");
             }
-            other => panic!("kỳ vọng InvalidInput trên `to`, nhận {other:?}"),
+            other => panic!("expected InvalidInput on `to`, got {other:?}"),
         }
     }
 
@@ -278,9 +278,12 @@ mod tests {
         let err = run(r#"[{"a":{"b":1}}]"#, "json", "csv").unwrap_err();
         match err {
             ToolError::InvalidInput { field: "to", msg } => {
-                assert!(msg.contains("phẳng"), "msg phải nêu giới hạn: {msg}");
+                assert!(
+                    msg.contains("flat"),
+                    "msg should state the limitation: {msg}"
+                );
             }
-            other => panic!("kỳ vọng InvalidInput trên `to`, nhận {other:?}"),
+            other => panic!("expected InvalidInput on `to`, got {other:?}"),
         }
     }
 

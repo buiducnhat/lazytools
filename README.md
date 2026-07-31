@@ -1,8 +1,10 @@
+[English](README.md) | [Tiếng Việt](README.vi.md)
+
 # lazytools
 
-Bộ tiện ích chạy trong terminal — offline, bàn phím-first. Giống
-[it-tools](https://github.com/CorentinTh/it-tools) nhưng ở dạng TUI, và đồng thời
-dùng được thẳng trong shell pipeline.
+A terminal utility belt — offline, keyboard-first. Like
+[it-tools](https://github.com/CorentinTh/it-tools) but as a TUI, while also
+working directly in shell pipelines.
 
 ```console
 $ echo -n "hello world" | lazytools hash --algo md5
@@ -14,7 +16,7 @@ aGVsbG8=
 $ lazytools data-format --from json --to yaml config.json > config.yaml
 ```
 
-Gõ `lazytools` không tham số để mở giao diện:
+Run `lazytools` with no arguments to open the interface:
 
 ```
 ┌ Tools ───────────────┐┌ Hash Text ─────────────────────────────────────┐
@@ -29,12 +31,12 @@ Gõ `lazytools` không tham số để mở giao diện:
 │  JSON Format         ││└──────────────────────────────────────────────┘│
 │  Data Format         ││                                                │
 └──────────────────────┘└────────────────────────────────────────────────┘
-[Tab] field kế [^P] palette [y] copy [?] trợ giúp [q] thoát
+[Tab] next field [^P] palette [y] copy [?] help [q] quit
 ```
 
-## Cài đặt
+## Install
 
-Cần Rust 1.97 trở lên (edition 2024).
+Requires Rust 1.97 or newer (edition 2024).
 
 ```bash
 git clone https://github.com/<you>/lazy-tools
@@ -42,44 +44,45 @@ cd lazy-tools
 cargo install --path crates/lazytools
 ```
 
-Hoặc chạy tại chỗ: `cargo run -p lazytools`.
+Or run it in place: `cargo run -p lazytools`.
 
-## Danh mục tool
+## Tool catalog
 
-| Lệnh | Mô tả |
+| Command | Description |
 |---|---|
-| `hash` | Băm văn bản bằng MD5 / SHA-1 / SHA-256 / SHA-512 |
-| `hmac` | HMAC với khóa bí mật (SHA-1 / SHA-256 / SHA-512) |
-| `bcrypt` | Băm mật khẩu, hoặc kiểm tra hash có khớp không |
-| `base64` | Văn bản ⇄ Base64, có tùy chọn bảng chữ cái URL-safe |
-| `url` | Percent-encode / decode chuỗi URL |
-| `hex` | Văn bản ⇄ hex |
-| `json-format` | Format hoặc minify JSON, giữ nguyên thứ tự khóa |
-| `data-format` | Chuyển đổi giữa JSON, YAML, TOML và CSV |
+| `hash` | Hash text with MD5 / SHA-1 / SHA-256 / SHA-512 |
+| `hmac` | HMAC with a secret key (SHA-1 / SHA-256 / SHA-512) |
+| `bcrypt` | Hash a password, or check whether a hash matches |
+| `base64` | Text ⇄ Base64, with an optional URL-safe alphabet |
+| `url` | Percent-encode / decode a URL string |
+| `hex` | Text ⇄ hex |
+| `json-format` | Format or minify JSON, preserving key order |
+| `data-format` | Convert between JSON, YAML, TOML, and CSV |
 
-`lazytools <lệnh> --help` cho biết đầy đủ tùy chọn — phần trợ giúp đó **sinh
-thẳng từ khai báo của tool**, nên không bao giờ lệch với hành vi thật.
+`lazytools <command> --help` shows the full set of options — that help text is
+**generated directly from the tool's declaration**, so it never drifts from
+actual behavior.
 
-## Dùng trong pipeline
+## Using it in a pipeline
 
-- Một output → in **raw**, không nhãn, không trang trí.
-- Nhiều output → mỗi dòng một cặp `key=value`.
-- `--json` → in toàn bộ output dạng JSON.
-- Input đọc từ stdin khi thiếu đối số vị trí hoặc khi truyền `-`.
+- A single output → printed **raw**, no label, no decoration.
+- Multiple outputs → one `key=value` pair per line.
+- `--json` → prints the whole output as JSON.
+- Input is read from stdin when a positional argument is missing, or when `-` is passed.
 
-## Phím tắt
+## Keyboard shortcuts
 
-| Phím | Việc |
+| Key | Action |
 |---|---|
-| `Tab` | Chuyển vùng / sang field kế |
-| `j` `k` / `↑` `↓` | Di chuyển trong sidebar |
-| `Ctrl+P` | Palette tìm tool (khớp mờ trên tên, từ khóa, mô tả) |
-| `y` | Copy output đang chọn |
-| `Ctrl+O` / `Ctrl+S` | Mở file vào input / lưu output ra file |
-| `?` | Trợ giúp |
-| `q` | Thoát |
+| `Tab` | Switch pane / move to next field |
+| `j` `k` / `↑` `↓` | Move within the sidebar |
+| `Ctrl+P` | Tool-finder palette (fuzzy match on name, keywords, description) |
+| `y` | Copy the currently focused output |
+| `Ctrl+O` / `Ctrl+S` | Open a file into the input / save output to a file |
+| `?` | Help |
+| `q` | Quit |
 
-Đổi phím bằng `~/.config/lazytools/keys.toml`:
+Remap keys via `~/.config/lazytools/keys.toml`:
 
 ```toml
 palette = "ctrl+k"
@@ -87,16 +90,16 @@ quit = "q"
 help = "?"
 ```
 
-Config hỏng **không chặn app khởi động** — lazytools vẫn mở với phím mặc định và
-báo rõ mục nào bị bỏ qua, để bạn vào sửa được.
+A broken config **does not block startup** — lazytools still opens with the
+default keys and clearly reports which entries were skipped, so you can go fix them.
 
-## Thêm một tool mới
+## Adding a new tool
 
-Đây là phần quan trọng nhất cho việc bảo trì lâu dài, nên nó được thiết kế để
-rẻ: **một file mới + một dòng trong `register_all()`**. Không đụng tới ratatui,
-không đụng tới clap.
+This is the most important part for long-term maintainability, so it's designed
+to be cheap: **one new file + one line in `register_all()`**. No touching
+ratatui, no touching clap.
 
-Tạo `crates/lazytools-core/src/tools/text/reverse.rs`:
+Create `crates/lazytools-core/src/tools/text/reverse.rs`:
 
 ```rust
 use crate::{error::ToolError, registry::Tool, spec::*, value::*};
@@ -107,8 +110,8 @@ impl Default for ReverseTool {
     fn default() -> Self {
         Self {
             spec: ToolSpec::new("text.reverse", "Reverse Text", Category::Text)
-                .describe("Đảo ngược văn bản")
-                .keywords(&["reverse", "đảo", "flip"])
+                .describe("Reverse a piece of text")
+                .keywords(&["reverse", "flip"])
                 .input(Field::text("text").multiline().label("Input"))
                 .output(Field::text("result").label("Result")),
         }
@@ -124,34 +127,35 @@ impl Tool for ReverseTool {
 }
 ```
 
-Rồi thêm đúng một dòng vào `tools/mod.rs`:
+Then add exactly one line to `tools/mod.rs`:
 
 ```rust
 Box::new(text::reverse::ReverseTool::default()),
 ```
 
-Xong. Tool xuất hiện **đồng thời** ở sidebar TUI, ở palette, và ở
-`lazytools --help` — form nhập được dựng tự động từ `ToolSpec`, subcommand CLI
-cũng vậy.
+Done. The tool appears **simultaneously** in the TUI sidebar, in the palette, and
+in `lazytools --help` — the input form is built automatically from `ToolSpec`,
+and so is the CLI subcommand.
 
-### Vì sao lại được như thế
+### Why it's built this way
 
-`lazytools-core` không phụ thuộc ratatui/crossterm/clap. Mỗi tool chỉ khai một
-`ToolSpec` (mô tả field) và một hàm thuần `Inputs → Outputs`. Cả hai frontend
-đều **đọc** spec đó chứ không hard-code gì:
+`lazytools-core` has no dependency on ratatui/crossterm/clap. Each tool declares
+only a `ToolSpec` (describing its fields) and a pure `Inputs → Outputs` function.
+Both frontends **read** that spec instead of hard-coding anything:
 
-- `ToolFormComponent` dựng widget theo từng `FieldKind`.
-- Tầng CLI dựng subcommand + flag từ cùng spec ấy.
+- `ToolFormComponent` builds a widget per `FieldKind`.
+- The CLI layer builds subcommands + flags from that same spec.
 
-Hệ quả: chỉ có một nguồn sự thật, và chi phí thêm tool thứ 40 cũng ngang tool
-thứ 4. Có test bất biến (`crates/lazytools-core/tests/spec_invariants.rs`) duyệt
-toàn bộ registry để giữ tính chất này khỏi trôi.
+The consequence: there is a single source of truth, and the cost of adding the
+40th tool is about the same as the 4th. An invariant test
+(`crates/lazytools-core/tests/spec_invariants.rs`) walks the whole registry to
+keep this property from drifting.
 
-`RunMode::OnDemand` dành cho tool chạy chậm (bcrypt cost 12 mất ~250ms) — khai
-trong spec để ràng buộc hiển hiện ngay lúc viết tool, thay vì thành một sự cố
-giật UI phát hiện sau.
+`RunMode::OnDemand` is for slow tools (bcrypt at cost 12 takes ~250ms) —
+declared in the spec so the cost is visible right when the tool is written,
+instead of turning into a UI-jank incident discovered later.
 
-## Phát triển
+## Development
 
 ```bash
 cargo fmt --all --check
@@ -159,11 +163,17 @@ cargo clippy --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-CI chạy đúng ba lệnh trên, trên Linux + macOS + Windows.
+CI runs exactly these three commands, on Linux + macOS + Windows.
 
-Snapshot test của TUI dùng [`insta`](https://insta.rs); khi giao diện đổi có
-chủ đích thì duyệt lại bằng `cargo insta review`.
+The TUI's snapshot tests use [`insta`](https://insta.rs); when the interface
+changes on purpose, review them with `cargo insta review`.
 
-## Giấy phép
+## Documentation
+
+See [docs/SUMMARY.md](docs/SUMMARY.md) for architecture, codebase layout, code
+standards, and product context. A Vietnamese translation is available locally
+under `docs-vi/` (not tracked in git).
+
+## License
 
 MIT

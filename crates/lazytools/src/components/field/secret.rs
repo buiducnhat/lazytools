@@ -12,11 +12,11 @@ use crate::components::EventState;
 use crate::keys::{KeyConfig, key_match, typed_char};
 use crate::ui::SharedTheme;
 
-/// Field bí mật (khóa HMAC…): **luôn** render dạng che.
+/// Secret field (HMAC key…): **always** renders masked.
 ///
-/// Giá trị thật chỉ đi ra qua `value()` để nạp vào `Inputs`. Không log, không
-/// đưa vào snapshot, không ghi ra đâu cả. v0.1 không có persistence nên rủi ro
-/// rò rỉ đã nhỏ sẵn — nguyên tắc này giữ cho nó vẫn nhỏ khi thêm tính năng sau.
+/// The real value only ever leaves through `value()` to load into `Inputs`. No logging, no
+/// inclusion in snapshots, no writing anywhere else. v0.1 has no persistence so the leak risk
+/// is already small — this principle keeps it small when features are added later.
 pub struct SecretWidget {
     key: &'static str,
     label: &'static str,
@@ -69,7 +69,7 @@ impl FieldWidget for SecretWidget {
         let inner = block.inner(body);
         f.render_widget(block, body);
 
-        // Chỉ độ dài bị lộ, không bao giờ lộ nội dung.
+        // Only the length is exposed, never the content.
         let masked = "•".repeat(self.area.value().chars().count());
         f.render_widget(Paragraph::new(masked).style(self.theme.text()), inner);
 

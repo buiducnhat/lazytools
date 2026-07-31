@@ -14,8 +14,8 @@ use crate::components::EventState;
 use crate::keys::{KeyConfig, key_match, typed_char};
 use crate::ui::SharedTheme;
 
-/// Ô nhập đường dẫn: nhập tay, hoặc mở file picker bằng phím `open_file`.
-/// Cảnh báo tại chỗ nếu `must_exist` mà file chưa có.
+/// A path input field: typed by hand, or opens the file picker via the `open_file` key.
+/// Warns inline if `must_exist` is set but the file doesn't exist yet.
 pub struct FilePathWidget {
     key: &'static str,
     label: &'static str,
@@ -37,7 +37,7 @@ impl FilePathWidget {
         }
     }
 
-    /// Cảnh báo tại chỗ, tách khỏi `error` do tool trả về.
+    /// Inline warning, separate from the `error` returned by the tool.
     fn missing_file(&self) -> bool {
         let value = self.area.value();
         self.must_exist && !value.is_empty() && !Path::new(&value).exists()
@@ -60,7 +60,7 @@ impl FieldWidget for FilePathWidget {
     fn draw(&self, f: &mut Frame, rect: Rect, focused: bool) {
         let note = self.error.clone().or_else(|| {
             self.missing_file()
-                .then(|| "file không tồn tại".to_string())
+                .then(|| "file does not exist".to_string())
         });
         let has_note = note.is_some();
         let body = Rect {
@@ -111,7 +111,7 @@ impl FieldWidget for FilePathWidget {
         };
         let b = &keys.keys;
 
-        // Nhường phím mở picker lên cấp app thay vì tự nuốt.
+        // Defer the picker-open key up to the app level instead of swallowing it here.
         if key_match(k, b.open_file) {
             return Ok(EventState::NotConsumed);
         }

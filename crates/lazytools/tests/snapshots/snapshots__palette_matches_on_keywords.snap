@@ -1,6 +1,5 @@
 ---
 source: crates/lazytools/tests/snapshots.rs
-assertion_line: 150
 expression: screen
 ---
 "┌ Tools ───────────────┐┌ Hash Text ───────────────────────────────────────────┐"
@@ -8,7 +7,7 @@ expression: screen
 "│  Hash Text           │││                                                    ││"
 "│  HMAC                │││                                                    ││"
 "│  Bcrypt              │││                                                    ││"
-"│Convert    ┌ Tìm tool ────────────────────────────────────────────┐          ││"
+"│Convert    ┌ Find tool ───────────────────────────────────────────┐          ││"
 "│  Base64   │> md5                                                 │          ││"
 "│  URL Encod│Hash Text       Crypto                                │          ││"
 "│  Hex      │                                                      │──────────┘│"
@@ -26,4 +25,4 @@ expression: screen
 "│                      ││                                                      │"
 "│                      ││                                                      │"
 "└──────────────────────┘└──────────────────────────────────────────────────────┘"
-"[↓/↑] chọn [Enter] mở tool [Tab] đổi vùng [^P] palette [^O] mở file [?] trợ giúp"
+"[↓/↑] select [Enter] open tool [Tab] switch pane [^P] palette [^O] open file [?]"

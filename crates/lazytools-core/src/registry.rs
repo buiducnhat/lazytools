@@ -48,20 +48,20 @@ impl Registry {
         self.all().filter(move |t| t.spec().category == c)
     }
 
-    /// Bọc `catch_unwind` quanh `tool.run()`: crate bên thứ ba panic không được
-    /// phép làm hỏng terminal đang ở raw mode.
+    /// Wraps `catch_unwind` around `tool.run()`: a panic in a third-party crate must
+    /// not be allowed to corrupt the terminal while it's in raw mode.
     pub fn run(&self, id: &str, i: &Inputs) -> Result<Outputs, ToolError> {
         let tool = self
             .get(id)
-            .ok_or_else(|| ToolError::Failed(format!("không có tool nào tên `{id}`")))?;
+            .ok_or_else(|| ToolError::Failed(format!("no tool named `{id}`")))?;
 
         std::panic::catch_unwind(AssertUnwindSafe(|| tool.run(i))).unwrap_or_else(|payload| {
             let detail = payload
                 .downcast_ref::<&str>()
                 .map(|s| (*s).to_string())
                 .or_else(|| payload.downcast_ref::<String>().cloned())
-                .unwrap_or_else(|| "panic không rõ nguyên nhân".to_string());
-            Err(ToolError::Failed(format!("tool `{id}` panic: {detail}")))
+                .unwrap_or_else(|| "panic with unknown cause".to_string());
+            Err(ToolError::Failed(format!("tool `{id}` panicked: {detail}")))
         })
     }
 }
