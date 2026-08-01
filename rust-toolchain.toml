@@ -1,0 +1,13 @@
+# Pins the toolchain used everywhere: local builds, CI, and release builds.
+#
+# This exists because dist's generated release workflow only installs Rust inside
+# containers — on native macOS and Windows runners it uses whatever the image ships.
+# The aarch64-apple-darwin image shipped rustc 1.96.0, below the 1.97 MSRV declared in
+# Cargo.toml, so the release build failed there while every other target succeeded.
+#
+# Pinned to the MSRV rather than "stable" for two reasons: it makes release builds
+# reproducible, and it means CI actually verifies the minimum version the crates claim
+# to support instead of only ever testing a newer compiler.
+[toolchain]
+channel = "1.97"
+components = ["rustfmt", "clippy"]
