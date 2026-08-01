@@ -5,9 +5,13 @@ members = ["crates/lazytools-core", "crates/lazytools"]
 [workspace.package]
 edition = "2024"
 license = "MIT"
+rust-version = "1.97"
+repository = "https://github.com/buiducnhat/lazytools"
 
 [workspace.dependencies]
-lazytools-core = { path = "crates/lazytools-core" }
+# `version` is required alongside `path`: crates.io rejects a bare path dependency.
+# Cargo builds locally from the path and publishes the version.
+lazytools-core = { path = "crates/lazytools-core", version = "0.1.0" }
 
 thiserror = "2.0"
 md-5 = "0.11"
