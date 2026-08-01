@@ -24,6 +24,47 @@ file summarizes its scope decisions in English for ongoing reference).
   `convert.data-format`.
 - GitHub Actions CI across macOS, Linux, and Windows.
 
+## MVP follow-ups closed in v0.1.0
+
+The MVP execution report left two acceptance items written but never actually
+executed, because the repository had no remote and the behaviors involved
+cannot be reached headlessly. Both were run for real during the v0.1.0
+release, and both are now verified rather than assumed.
+
+- **Follow-up #1 — three-platform CI, proven.** The workflow had existed since
+  the MVP without ever running. First execution was green on `ubuntu-latest`,
+  `macos-latest`, and `windows-latest`, reporting an identical **86 passed** on
+  every platform. The anticipated friction point — `arboard` on headless
+  Windows — did not materialize, as the report predicted it might not, since no
+  test touches the clipboard.
+- **Follow-up #2 — manual terminal QA, run by a human.** All four behaviors
+  were exercised in a real terminal: bracketed paste, `y` copying to the
+  *system* clipboard, clean terminal restoration after `q`, and an `OnDemand`
+  tool opening instantly without auto-running.
+
+  **This gate earned its place: it caught a real defect.** Pasting a block whose
+  lines ended in CR (rather than LF) silently destroyed every line break,
+  because `TextArea::insert_str` stripped `\r` instead of treating it as a line
+  break. Every headless test used `\n` exclusively, so nothing caught it. Fixed
+  before release, with three regression tests covering CR, CRLF, and the
+  single-line flattening case — raising the suite from 86 to 89.
+
+## Distribution
+
+`v0.1.0` ships through three channels, all produced from one tag by
+[dist](https://github.com/axodotdev/cargo-dist):
+
+- **GitHub Releases** — prebuilt archives for five targets
+  (`aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`,
+  `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`), with checksums, plus
+  shell and PowerShell installer scripts.
+- **Homebrew** — `brew install buiducnhat/tap/lazytools`, with the formula
+  pushed automatically to `buiducnhat/homebrew-tap` on each release.
+- **crates.io** — `cargo install lazytools`.
+
+See [releasing.md](../code-standard/releasing.md) for how a release is cut and
+why the publish order matters.
+
 ## Explicitly out of scope (deferred to a future v0.2)
 
 - **JWT decode/verify** — deferred.

@@ -39,11 +39,37 @@ Gõ `lazytools` không tham số để mở giao diện:
 
 ## Cài đặt
 
-Cần Rust 1.97 trở lên (edition 2024).
+**Homebrew** (macOS, Linux)
 
 ```bash
-git clone https://github.com/<you>/lazy-tools
-cd lazy-tools
+brew install buiducnhat/tap/lazytools
+```
+
+**Trình cài đặt shell** (macOS, Linux)
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/buiducnhat/lazytools/releases/latest/download/lazytools-installer.sh | sh
+```
+
+**PowerShell** (Windows)
+
+```powershell
+powershell -c "irm https://github.com/buiducnhat/lazytools/releases/latest/download/lazytools-installer.ps1 | iex"
+```
+
+**Cargo** — cần Rust 1.97 trở lên (edition 2024)
+
+```bash
+cargo install lazytools
+```
+
+Hoặc tải binary dựng sẵn từ [trang releases](https://github.com/buiducnhat/lazytools/releases).
+
+### Build từ mã nguồn
+
+```bash
+git clone https://github.com/buiducnhat/lazytools
+cd lazytools
 cargo install --path crates/lazytools
 ```
 

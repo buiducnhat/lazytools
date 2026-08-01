@@ -36,11 +36,37 @@ Run `lazytools` with no arguments to open the interface:
 
 ## Install
 
-Requires Rust 1.97 or newer (edition 2024).
+**Homebrew** (macOS, Linux)
 
 ```bash
-git clone https://github.com/<you>/lazy-tools
-cd lazy-tools
+brew install buiducnhat/tap/lazytools
+```
+
+**Shell installer** (macOS, Linux)
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/buiducnhat/lazytools/releases/latest/download/lazytools-installer.sh | sh
+```
+
+**PowerShell** (Windows)
+
+```powershell
+powershell -c "irm https://github.com/buiducnhat/lazytools/releases/latest/download/lazytools-installer.ps1 | iex"
+```
+
+**Cargo** — requires Rust 1.97 or newer (edition 2024)
+
+```bash
+cargo install lazytools
+```
+
+Or grab a prebuilt binary from the [releases page](https://github.com/buiducnhat/lazytools/releases).
+
+### From source
+
+```bash
+git clone https://github.com/buiducnhat/lazytools
+cd lazytools
 cargo install --path crates/lazytools
 ```
 

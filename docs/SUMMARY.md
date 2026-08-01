@@ -35,6 +35,7 @@ Conventions, naming rules, tech stack versions, and development workflows.
 | [conventions.md](code-standard/conventions.md) | Language (English-only code/comments/UI text), edition/toolchain, crate boundary rule, error-handling conventions, naming |
 | [adding-a-tool.md](code-standard/adding-a-tool.md) | Step-by-step for adding a new tool, `ToolSpec` content conventions, and the invariants CI enforces |
 | [testing-conventions.md](code-standard/testing-conventions.md) | The four test layers (tool unit tests, spec invariants, CLI end-to-end, TUI/snapshot) and when to use each |
+| [releasing.md](code-standard/releasing.md) | How a release is cut: dist config, the tag-driven pipeline, crates.io publish ordering, and why crates.io goes last |
 
 ## Project PDR
 
