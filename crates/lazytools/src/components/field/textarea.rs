@@ -105,8 +105,13 @@ impl TextArea {
 
     /// Bracketed paste — the main data entry path, more important than editing.
     pub fn insert_str(&mut self, text: &str) {
+        // Terminals deliver pasted line breaks as CR, CRLF, or LF depending on the emulator
+        // and where the text was copied from. Normalize to LF first: stripping CR instead
+        // silently glues adjacent lines into one, and CRLF would count as two breaks.
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+
         if self.single_line {
-            let flat = text.replace(['\n', '\r'], " ");
+            let flat = text.replace('\n', " ");
             let at = byte_at(&self.lines[self.cursor_line], self.cursor_col);
             self.lines[self.cursor_line].insert_str(at, &flat);
             self.cursor_col += graphemes(&flat).len();
@@ -115,12 +120,11 @@ impl TextArea {
 
         let at = byte_at(&self.lines[self.cursor_line], self.cursor_col);
         let tail = self.lines[self.cursor_line].split_off(at);
-        let mut parts = text.replace('\r', "");
+        let mut parts = text.clone();
         parts.push_str(&tail);
 
         let new_lines: Vec<String> = parts.split('\n').map(String::from).collect();
-        let pasted_lines = text.replace('\r', "");
-        let pasted_lines: Vec<&str> = pasted_lines.split('\n').collect();
+        let pasted_lines: Vec<&str> = text.split('\n').collect();
 
         let head = self.lines[self.cursor_line].clone();
         self.lines.remove(self.cursor_line);
@@ -339,10 +343,40 @@ mod tests {
         assert_eq!(ta.cursor_col, 3);
     }
 
+    /// Bracketed paste often arrives with CR line endings rather than LF. Stripping the CR
+    /// used to glue every line into one — with trailing whitespace left behind, a pasted
+    /// block looked like it had merely lost its line breaks to spaces.
+    #[test]
+    fn paste_treats_cr_line_endings_as_line_breaks() {
+        let mut ta = TextArea::new(false);
+        ta.insert_str("alpha\rbravo\rcharlie");
+        assert_eq!(ta.value(), "alpha\nbravo\ncharlie");
+        assert_eq!(ta.lines.len(), 3);
+        assert_eq!(ta.cursor_line, 2);
+    }
+
+    #[test]
+    fn paste_treats_crlf_as_one_line_break() {
+        let mut ta = TextArea::new(false);
+        ta.insert_str("alpha\r\nbravo\r\ncharlie");
+        assert_eq!(ta.value(), "alpha\nbravo\ncharlie");
+        assert_eq!(ta.lines.len(), 3);
+    }
+
     #[test]
     fn single_line_flattens_pasted_newlines() {
         let mut ta = TextArea::new(true);
         ta.insert_str("a\nb\nc");
+        assert_eq!(ta.value(), "a b c");
+        assert_eq!(ta.lines.len(), 1);
+    }
+
+    /// A single-line field collapses each break to exactly one space, whichever encoding
+    /// the terminal used — CRLF must not become two.
+    #[test]
+    fn single_line_flattens_cr_and_crlf_to_one_space_each() {
+        let mut ta = TextArea::new(true);
+        ta.insert_str("a\r\nb\rc");
         assert_eq!(ta.value(), "a b c");
         assert_eq!(ta.lines.len(), 1);
     }
