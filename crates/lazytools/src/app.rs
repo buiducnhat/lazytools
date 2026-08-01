@@ -225,9 +225,14 @@ impl App {
         if self.focus == Focus::Workspace {
             cmds.push(CommandInfo::new(self.key_config.hint(keys.copy), "copy", "App").order(58));
         }
-        cmds.push(
-            CommandInfo::new(self.key_config.hint(keys.open_file), "open file", "App").order(56),
-        );
+        // Only advertised when it would actually do something — a hint for a key that
+        // does nothing is worse than no hint at all.
+        if self.tool_form.accepts_file_input() {
+            cmds.push(
+                CommandInfo::new(self.key_config.hint(keys.open_file), "open file", "App")
+                    .order(56),
+            );
+        }
         if self.focus == Focus::Workspace {
             cmds.push(
                 CommandInfo::new(self.key_config.hint(keys.save_file), "save file", "App")
@@ -270,7 +275,12 @@ impl App {
                     self.queue.push(InternalEvent::CopyToClipboard(text));
                 }
             } else if key_match(k, keys.open_file) {
-                self.file_open.show()?;
+                if self.tool_form.accepts_file_input() {
+                    self.file_open.show()?;
+                } else {
+                    self.msg_popup
+                        .show_error("this tool has no input to open a file into".to_string());
+                }
             } else if key_match(k, keys.save_file) {
                 if let Some(text) = self.tool_form.focused_value() {
                     self.queue.push(InternalEvent::SaveOutput(text));

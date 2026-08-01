@@ -7,8 +7,9 @@ is optimized for: **one new file + one line**, no changes to the TUI or CLI laye
 ## Steps
 
 1. Create a new file under `crates/lazytools-core/src/tools/<category>/<name>.rs`
-   (categories today: `crypto/`, `convert/`; add a new subdirectory for a new
-   category and a matching variant in `spec::Category` if needed).
+   (categories today: `crypto/`, `convert/`, `text/`, `web/`; add a new
+   subdirectory for a new category and a matching variant in `spec::Category`
+   if needed).
 2. Define a struct holding a `ToolSpec`, built in `Default::default()`:
 
    ```rust
@@ -55,7 +56,9 @@ Done — the tool now shows up in the sidebar, the `Ctrl+P` palette, and
 
 - `id` is `"<category>.<name>"` (e.g. `"crypto.hash"`); the CLI subcommand name
   is derived automatically by stripping the category prefix
-  (`ToolSpec::cli_name()`).
+  (`ToolSpec::cli_name()`). The part after the dot must be **kebab-case**
+  (`convert.data-format`, not `convert.data_format`) — `cli_name` may only
+  contain `[a-z0-9-]`, and `spec_invariants` fails CI otherwise.
 - `.describe(...)`, `.keywords(...)`, and every `.label(...)` are **user-facing
   text shown in the TUI and CLI help** — write them in English, since that's
   the language of the rest of the interface (`lazytools --help`, the sidebar,
@@ -72,6 +75,31 @@ Done — the tool now shows up in the sidebar, the `Ctrl+P` palette, and
   specific problem (not just "invalid input") — the CLI layer prefixes it with
   `--flag-name:` or the field name automatically, so the message itself only
   needs to describe what's wrong.
+
+## Writing a generator
+
+Tools that produce a random value (the `Generate` category) have four extra
+rules. Each exists because of a constraint elsewhere in the codebase, so they
+are not stylistic:
+
+- **Use `RunMode::Generate`.** It runs the tool on open *and* makes the confirm
+  key produce a fresh value. `Live` gives the user no way to ask for a different
+  result; `OnDemand` opens showing nothing.
+- **Declare at least one option.** `ToolFormComponent::event` only fires a run
+  request while focus is on an *editable* field, so a tool with no inputs and no
+  options can never be re-triggered — it would generate exactly once and be
+  stuck there.
+- **Don't use a `Toggle` that defaults to `true`.** The CLI layer maps `Toggle`
+  to `ArgAction::SetTrue`, which implies a `false` default; `cli::apply_kind`
+  has a `debug_assert!` that rejects anything else. Reach for a `Select` instead
+  — `generate.password` uses a `charset` select rather than three toggles for
+  exactly this reason.
+- **Return `Ok` for the default inputs.** `spec_invariants::declared_outputs_are_actually_produced`
+  tolerates an `InvalidInput` rejection but not a `Failed` or a panic, and a
+  generator has no reason to reject its own defaults.
+
+Test generators by **property**, never by fixed value: assert the length, the
+alphabet, the line count, the ordering — not the bytes.
 
 ## Invariants enforced by tests
 

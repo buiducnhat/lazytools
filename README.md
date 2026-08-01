@@ -74,16 +74,54 @@ Or run it in place: `cargo run -p lazytools`.
 
 ## Tool catalog
 
+22 tools across five categories — the same grouping the TUI sidebar uses.
+
+**Crypto**
+
 | Command | Description |
 |---|---|
 | `hash` | Hash text with MD5 / SHA-1 / SHA-256 / SHA-512 |
 | `hmac` | HMAC with a secret key (SHA-1 / SHA-256 / SHA-512) |
 | `bcrypt` | Hash a password, or check whether a hash matches |
+
+**Convert**
+
+| Command | Description |
+|---|---|
 | `base64` | Text ⇄ Base64, with an optional URL-safe alphabet |
 | `url` | Percent-encode / decode a URL string |
 | `hex` | Text ⇄ hex |
 | `json-format` | Format or minify JSON, preserving key order |
 | `data-format` | Convert between JSON, YAML, TOML, and CSV |
+| `number-base` | Convert a number between binary, octal, decimal, and hex |
+| `unicode` | Escape text to Unicode sequences, or decode them back |
+
+**Generate**
+
+| Command | Description |
+|---|---|
+| `password` | Generate a random password |
+| `uuid` | Generate random UUIDs (v4 or time-ordered v7) |
+| `ulid` | Generate lexicographically sortable ULIDs |
+| `token` | Generate a random token of N bytes |
+| `lorem` | Generate placeholder lorem ipsum text |
+
+**Text**
+
+| Command | Description |
+|---|---|
+| `case` | Convert text between camel, snake, kebab, and other cases |
+| `stats` | Count characters, words, lines, and bytes in text |
+
+**Web**
+
+| Command | Description |
+|---|---|
+| `jwt-decode` | Decode a JWT and optionally verify its HMAC signature |
+| `timestamp` | Convert between Unix timestamps and human-readable dates |
+| `cron` | Explain a cron expression and list its next runs |
+| `url-parse` | Break a URL into its parts |
+| `json-diff` | Compare two JSON documents structurally |
 
 `lazytools <command> --help` shows the full set of options — that help text is
 **generated directly from the tool's declaration**, so it never drifts from

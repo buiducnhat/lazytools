@@ -31,6 +31,9 @@ pub struct ToolFormComponent {
     widgets: Vec<Box<dyn FieldWidget>>,
     /// The first N widgets are inputs + options; the rest are outputs (read-only).
     editable_count: usize,
+    /// How many of those leading widgets are *inputs*. Zero for generators, which is
+    /// what stops "open file" from writing into the first option.
+    input_count: usize,
     focus: usize,
     mode: RunMode,
     error: Option<String>,
@@ -47,6 +50,7 @@ impl ToolFormComponent {
             tool_id: None,
             widgets: Vec::new(),
             editable_count: 0,
+            input_count: 0,
             focus: 0,
             mode: RunMode::Live,
             error: None,
@@ -78,6 +82,7 @@ impl ToolFormComponent {
         self.tool_id = Some(spec.id);
         self.widgets = widgets;
         self.editable_count = editable_count;
+        self.input_count = spec.inputs.len();
         self.focus = 0;
         self.mode = spec.mode;
         self.error = None;
@@ -107,21 +112,29 @@ impl ToolFormComponent {
         }
     }
 
+    /// Deliberately only about `Live`: a `Generate` tool has nothing but small options,
+    /// so it can never reach the 256KB threshold and never gets downgraded.
     fn is_downgraded(&self) -> bool {
         self.mode == RunMode::Live && self.effective_mode() == RunMode::OnDemand
     }
 
-    /// Runs the tool right away, but **only** if it's `Live`. `OnDemand` tools stay put:
-    /// bcrypt at cost 12 costs ~200ms, so auto-running it on open would freeze the UI to
-    /// hash an empty password nobody asked for. That's the whole reason `OnDemand` exists.
+    /// Whether the tool runs by itself, without waiting for a key press.
+    fn runs_automatically(&self) -> bool {
+        matches!(self.effective_mode(), RunMode::Live | RunMode::Generate)
+    }
+
+    /// Runs the tool right away, but **only** if it runs automatically. `OnDemand` tools
+    /// stay put: bcrypt at cost 12 costs ~200ms, so auto-running it on open would freeze
+    /// the UI to hash an empty password nobody asked for. That's the whole reason
+    /// `OnDemand` exists.
     fn autorun(&mut self) {
-        if self.effective_mode() == RunMode::Live {
+        if self.runs_automatically() {
             self.run_at = Some(Instant::now());
         }
     }
 
     pub fn mark_dirty(&mut self) {
-        if self.effective_mode() == RunMode::Live {
+        if self.runs_automatically() {
             self.run_at = Some(Instant::now() + DEBOUNCE);
         }
     }
@@ -182,9 +195,20 @@ impl ToolFormComponent {
         self.widgets.get(self.focus).map(|w| w.value().as_display())
     }
 
+    /// Whether "open file" has anywhere to put the content. A tool with no inputs
+    /// (every generator) has none — the first widget there is an *option*.
+    pub fn accepts_file_input(&self) -> bool {
+        self.input_count > 0
+    }
+
     /// Loads file content into the **primary input** (the spec's first input field).
     /// The tool still only receives plain text — reading the file is the UI layer's job.
     pub fn set_primary_input(&mut self, text: &str) {
+        // Guard, not an `if let`: without an input, `widgets.first_mut()` is the first
+        // option, and this would dump a whole file into e.g. a `length` box.
+        if !self.accepts_file_input() {
+            return;
+        }
         if let Some(w) = self.widgets.first_mut() {
             w.set_value(&Value::Text(text.to_string()));
             self.autorun();
@@ -220,21 +244,28 @@ impl DrawableComponent for ToolFormComponent {
             y += area.height;
         }
 
-        // Badge shown whenever the tool won't run on its own — either it's natively
-        // `OnDemand`, or large input auto-downgraded it. Without it, an `OnDemand` tool
-        // just shows an empty output with no clue that a keypress is what's missing.
-        if self.effective_mode() == RunMode::OnDemand && y < bottom {
-            let why = if self.is_downgraded() {
-                "large input — "
-            } else {
-                ""
-            };
+        // Badge shown whenever the confirm key does something — either the tool won't run
+        // on its own (`OnDemand`, or large input auto-downgraded it), or it will produce a
+        // fresh result (`Generate`). Without it, an `OnDemand` tool just shows an empty
+        // output with no clue that a keypress is what's missing.
+        let key = self.key_config.hint(self.key_config.keys.confirm);
+        let badge = match self.effective_mode() {
+            RunMode::OnDemand => {
+                let why = if self.is_downgraded() {
+                    "large input — "
+                } else {
+                    ""
+                };
+                Some(format!("{why}press {key} to run"))
+            }
+            RunMode::Generate => Some(format!("press {key} to regenerate")),
+            RunMode::Live => None,
+        };
+        if let Some(badge) = badge
+            && y < bottom
+        {
             f.render_widget(
-                Paragraph::new(Line::from(format!(
-                    "{why}press {} to run",
-                    self.key_config.hint(self.key_config.keys.confirm)
-                )))
-                .style(self.theme.dim()),
+                Paragraph::new(Line::from(badge)).style(self.theme.dim()),
                 Rect {
                     x: rect.x,
                     y,
@@ -277,9 +308,14 @@ impl Component for ToolFormComponent {
                 CommandInfo::new(self.key_config.hint(keys.focus_next), "next field", "Form")
                     .order(2),
             );
-            if self.effective_mode() == RunMode::OnDemand {
+            let action = match self.effective_mode() {
+                RunMode::OnDemand => Some("run"),
+                RunMode::Generate => Some("regenerate"),
+                RunMode::Live => None,
+            };
+            if let Some(action) = action {
                 out.push(
-                    CommandInfo::new(self.key_config.hint(keys.confirm), "run", "Form").order(3),
+                    CommandInfo::new(self.key_config.hint(keys.confirm), action, "Form").order(3),
                 );
             }
         }
@@ -304,10 +340,11 @@ impl Component for ToolFormComponent {
                 return Ok(EventState::NotConsumed);
             }
 
-            // `OnDemand` (or Live that's been downgraded) runs when Enter is pressed.
-            let on_demand = self.effective_mode() == RunMode::OnDemand;
+            // `OnDemand` (or Live that's been downgraded) runs when Enter is pressed;
+            // `Generate` re-runs to produce a fresh value.
+            let runnable = matches!(self.effective_mode(), RunMode::OnDemand | RunMode::Generate);
             let editable = self.focus < self.editable_count;
-            if on_demand && editable && key_match(k, keys.confirm) {
+            if runnable && editable && key_match(k, keys.confirm) {
                 self.queue.push(InternalEvent::RunRequested);
                 return Ok(EventState::Consumed);
             }

@@ -3,6 +3,9 @@
 **lazytools** — an offline, keyboard-first terminal utility belt: a TUI plus a
 set of CLI subcommands sharing one spec-driven tool registry, built in Rust
 (edition 2024) with `ratatui` + `clap` on top of a UI-framework-free core crate.
+The catalog holds **22 tools** across five categories (Crypto, Convert,
+Generate, Text, Web), each declared in a single file and registered with a
+single line.
 
 ## Agent Context Guide
 
@@ -52,3 +55,4 @@ Product goals, use cases, business rules, and constraints.
 | ---- | ------------ |
 | [.brainstorms/260731-1635-lazytools-tui-architecture/](.brainstorms/260731-1635-lazytools-tui-architecture/SUMMARY.md) | Pre-implementation brainstorm (Vietnamese, archived): gitui research, architecture design, dependency verification |
 | [.plans/archived/260731-1641-lazytools-mvp/](.plans/archived/260731-1641-lazytools-mvp/SUMMARY.md) | Full MVP implementation plan and phase-by-phase execution log (Vietnamese, archived) |
+| [.plans/archived/260802-0012-lazytools-v02-catalog/](.plans/archived/260802-0012-lazytools-v02-catalog/SUMMARY.md) | v0.2 catalog expansion 8 → 22 tools, plus `RunMode::Generate` (Vietnamese, archived) — see its [EXECUTION-REPORT.md](.plans/archived/260802-0012-lazytools-v02-catalog/EXECUTION-REPORT.md) |

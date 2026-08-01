@@ -1,8 +1,8 @@
 # Spec-driven tool architecture
 
 The core design principle of lazytools: every tool is a plain data declaration
-(`ToolSpec`) plus a pure function, and both frontends (TUI and CLI) render
-themselves from that declaration instead of hard-coding anything about
+(`ToolSpec`) plus a single `run()` function, and both frontends (TUI and CLI)
+render themselves from that declaration instead of hard-coding anything about
 individual tools.
 
 ## The `Tool` trait and `ToolSpec`
@@ -22,13 +22,35 @@ pub trait Tool: Send + Sync {
 - `id` / `name` / `category` / `description` / `keywords` — identity and discovery metadata
 - `inputs`, `options`, `outputs` — ordered lists of `Field`, each with a `FieldKind`
   (`Text`, `Secret`, `Number`, `Select`, `Toggle`, `FilePath`)
-- `mode: RunMode` — `Live` (re-run automatically with debounce) or `OnDemand`
-  (only run when the user explicitly confirms — used by `bcrypt` since cost-12
-  hashing takes ~250ms and would freeze the UI if run on every keystroke)
+- `mode: RunMode` — one of three:
+  - `Live` — re-run automatically with debounce. The default.
+  - `OnDemand` — only run when the user explicitly confirms. Used by `bcrypt`,
+    since cost-12 hashing takes ~250ms and would freeze the UI if run on every
+    keystroke.
+  - `Generate` — runs on open and on option changes like `Live`, **and** the
+    confirm key re-runs it. This third variant exists because neither of the
+    other two fits a random generator: under `Live` there is no way to ask for a
+    *different* password without editing a field, and under `OnDemand` the tool
+    opens showing nothing at all.
 
-`run()` is a pure `Inputs -> Result<Outputs, ToolError>` function with no I/O,
-no terminal access, and no CLI dependency — this is what makes tools unit
-testable without any frontend involved.
+`run()` is an `Inputs -> Result<Outputs, ToolError>` function with no terminal
+access and no CLI dependency — this is what makes tools unit testable without
+any frontend involved.
+
+It is also pure, with **two deliberate exceptions**:
+
+- **Generators** (`Category::Generate`) draw from a random source, so the same
+  inputs give a different output every call — that *is* the feature.
+- **Clock-dependent Web tools** (`web.timestamp` with an empty value,
+  `web.cron`'s next-run list) read the system clock.
+
+Neither exception costs testability, because both are tested by **property**
+rather than by fixed value: that a password has the requested length and draws
+only from the requested character set, that consecutive ULIDs sort in ascending
+order, that a cron expression's next runs increase. Where a tool has both a pure
+and an impure branch — `web.timestamp` is pure for any explicit value — the pure
+branch is tested against fixed vectors and only the clock branch falls back to
+property assertions.
 
 ## How the two frontends consume the spec
 

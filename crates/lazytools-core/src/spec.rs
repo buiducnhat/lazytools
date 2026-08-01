@@ -38,6 +38,11 @@ pub enum RunMode {
     #[default]
     Live,
     OnDemand,
+    /// Like `Live` — runs on open and whenever an option changes — but the confirm
+    /// key also re-runs it. Random generators need that: with `Live` alone there is
+    /// no way to ask for a *different* password without editing a field, and with
+    /// `OnDemand` the tool opens showing nothing at all.
+    Generate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

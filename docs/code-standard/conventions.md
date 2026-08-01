@@ -53,11 +53,14 @@ both pass clean — clippy warnings are treated as errors in CI, not advisory.
 
 ## Naming
 
-- Tool ids: `<category>.<name>` in `snake_case` after the dot (e.g.
-  `crypto.hash`, `convert.data_format`). The CLI name is derived by stripping
+- Tool ids: `<category>.<name>` in **kebab-case** after the dot (e.g.
+  `crypto.hash`, `convert.data-format`). The CLI name is derived by stripping
   the category prefix — don't hand-roll a different CLI name in the tool spec.
-  `_` in a field key becomes `-` in its CLI flag (`url_safe` -> `--url-safe`),
-  handled once in `cli::flag_name`, not per tool.
+  This isn't a style preference: `spec_invariants::ids_map_to_unique_valid_cli_names`
+  rejects any `cli_name` containing characters outside `[a-z0-9-]`, so an
+  `_` in an id fails CI.
+  Field **keys**, by contrast, are `snake_case`; `_` becomes `-` in the CLI flag
+  (`url_safe` -> `--url-safe`), handled once in `cli::flag_name`, not per tool.
 - Component structs implementing the `Component`/`DrawableComponent` traits
   are named `<Thing>` for always-visible panels (`Sidebar`, `CommandBar`) and
   `<Thing>Popup` for anything that opens on demand (`HelpPopup`, `MsgPopup`,

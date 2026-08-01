@@ -1,12 +1,13 @@
 //! Snapshot tests via `TestBackend` — no real terminal needed.
 //! First run generates `.snap.new`; review with `cargo insta review`.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use lazytools::app::App;
 use lazytools_core::error::ToolError;
 use lazytools_core::registry::{Registry, Tool};
-use lazytools_core::spec::{Category, Field, ToolSpec};
+use lazytools_core::spec::{Category, Field, RunMode, ToolSpec};
 use lazytools_core::value::{Inputs, Outputs};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -294,6 +295,141 @@ fn every_field_kind_renders_and_secret_is_masked() {
     );
 
     insta::assert_snapshot!(screen);
+}
+
+/// Test-only stand-in for the generators added in Phase 3: `RunMode::Generate`, no
+/// inputs at all, one option. `run()` counts its calls, so the test asserts *behavior*
+/// (ran on open, ran again on confirm) without depending on a random value.
+struct CountingGeneratorTool {
+    spec: ToolSpec,
+    runs: &'static AtomicUsize,
+}
+
+impl CountingGeneratorTool {
+    fn new(runs: &'static AtomicUsize) -> Self {
+        Self {
+            spec: ToolSpec::new("generate.counter", "Counter", Category::Generate)
+                .describe("test-only generator")
+                .option(Field::number("count", 1, 10).default(5i64).label("Count"))
+                .output(Field::text("result").label("Result"))
+                .mode(RunMode::Generate),
+            runs,
+        }
+    }
+}
+
+impl Tool for CountingGeneratorTool {
+    fn spec(&self) -> &ToolSpec {
+        &self.spec
+    }
+    fn run(&self, _i: &Inputs) -> Result<Outputs, ToolError> {
+        let n = self.runs.fetch_add(1, Ordering::SeqCst) + 1;
+        Ok(Outputs::one("result", format!("run #{n}")))
+    }
+}
+
+/// The point of the third `RunMode`: `Live` gives no way to ask for a *different*
+/// value, and `OnDemand` opens showing nothing.
+#[test]
+fn generate_mode_runs_on_open_and_reruns_on_confirm() {
+    static RUNS: AtomicUsize = AtomicUsize::new(0);
+    let registry = Registry::from_tools(vec![Box::new(CountingGeneratorTool::new(&RUNS))]);
+    let mut terminal = terminal(80, 20);
+    let mut app = App::new(registry);
+
+    // Opening alone must produce a result — this is what `OnDemand` would not do.
+    std::thread::sleep(Duration::from_millis(150));
+    app.tick();
+    let screen = draw(&mut terminal, &mut app);
+    assert_eq!(
+        RUNS.load(Ordering::SeqCst),
+        1,
+        "must run on open:\n{screen}"
+    );
+    assert!(screen.contains("run #1"), "{screen}");
+
+    // The confirm key asks for a fresh value.
+    app.event(&key(KeyCode::Tab)).expect("tab into form");
+    app.process_queue().expect("queue");
+    app.event(&key(KeyCode::Enter)).expect("enter");
+    app.process_queue().expect("queue");
+    app.tick();
+
+    let screen = draw(&mut terminal, &mut app);
+    assert_eq!(
+        RUNS.load(Ordering::SeqCst),
+        2,
+        "confirm must regenerate:\n{screen}"
+    );
+    assert!(screen.contains("run #2"), "{screen}");
+}
+
+#[test]
+fn generate_mode_shows_regenerate_hint() {
+    static RUNS: AtomicUsize = AtomicUsize::new(0);
+    let registry = Registry::from_tools(vec![Box::new(CountingGeneratorTool::new(&RUNS))]);
+    let mut terminal = terminal(80, 20);
+    let mut app = App::new(registry);
+
+    std::thread::sleep(Duration::from_millis(150));
+    app.tick();
+    let screen = draw(&mut terminal, &mut app);
+
+    assert!(
+        screen.contains("regenerate"),
+        "a Generate tool must offer `regenerate`, not `run`:\n{screen}"
+    );
+}
+
+/// `set_primary_input` used to write into `widgets.first_mut()` unconditionally. With
+/// no inputs the first widget is an *option*, so opening a file dumped its whole
+/// contents into the `count` box.
+#[test]
+fn open_file_does_not_clobber_options_of_an_input_less_tool() {
+    static RUNS: AtomicUsize = AtomicUsize::new(0);
+    let registry = Registry::from_tools(vec![Box::new(CountingGeneratorTool::new(&RUNS))]);
+    let mut terminal = terminal(80, 20);
+    let mut app = App::new(registry);
+
+    let dir = std::env::temp_dir().join("lazytools-test-generate-openfile");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    let file = dir.join("input.txt");
+    std::fs::write(&file, "THIS MUST NOT LAND IN AN OPTION").expect("write sample file");
+
+    app.open_file(&file);
+    app.process_queue().expect("queue");
+    std::thread::sleep(Duration::from_millis(150));
+    app.tick();
+
+    let screen = draw(&mut terminal, &mut app);
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(
+        !screen.contains("THIS MUST NOT LAND"),
+        "file content must not reach an option:\n{screen}"
+    );
+    assert!(
+        screen.contains('5'),
+        "the `count` option must still hold its default:\n{screen}"
+    );
+}
+
+/// The command bar must not advertise a key that does nothing.
+#[test]
+fn open_file_is_not_advertised_for_an_input_less_tool() {
+    static RUNS: AtomicUsize = AtomicUsize::new(0);
+    let registry = Registry::from_tools(vec![Box::new(CountingGeneratorTool::new(&RUNS))]);
+    let mut terminal = terminal(100, 20);
+    let mut app = App::new(registry);
+
+    app.event(&key(KeyCode::Char('?'))).expect("?");
+    app.process_queue().expect("queue");
+    let screen = draw(&mut terminal, &mut app);
+
+    assert!(
+        !screen.contains("open file"),
+        "a tool with no input must not advertise `open file`:\n{screen}"
+    );
 }
 
 /// `y` is the copy key at the app level, but inside an input field it must be a

@@ -1,3 +1,11 @@
+//! Key order is **preserved** here, guaranteed by `serde_json`'s `preserve_order`
+//! feature (see the workspace `Cargo.toml`). For a formatter, silently resorting the
+//! user's keys is a bug.
+//!
+//! `web::json_diff` deliberately does the opposite and sorts keys before comparing,
+//! because there a key swap must *not* register as a change. Both are correct for
+//! their own tool — don't "unify" them.
+
 use crate::error::ToolError;
 use crate::registry::Tool;
 use crate::spec::{Category, Field, ToolSpec};

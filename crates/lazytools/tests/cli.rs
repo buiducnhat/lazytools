@@ -211,8 +211,155 @@ fn data_format_reports_toml_limits() {
     );
 }
 
+// --- Tools added in the v0.2 catalog expansion, batch 1. ---
+
+/// Multiple outputs → `key=value` per line, not a raw value.
 #[test]
-fn help_lists_all_eight_tools() {
+fn jwt_decode_reads_token_from_stdin() {
+    let out = lazytools()
+        .arg("jwt-decode")
+        .write_stdin(concat!(
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.",
+            "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.",
+            "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        ))
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    for key in ["header=", "payload=", "verification="] {
+        assert!(stdout.contains(key), "missing `{key}`:\n{stdout}");
+    }
+    assert!(
+        stdout.contains("not verified (no secret provided)"),
+        "no secret was passed:\n{stdout}"
+    );
+}
+
+#[test]
+fn number_base_json_output() {
+    let out = lazytools()
+        .args(["number-base", "255", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains(r#""hexadecimal":"ff""#),
+        "expected hex in JSON output:\n{stdout}"
+    );
+}
+
+// --- Tools added in the v0.2 catalog expansion, batch 2 (generators). ---
+
+/// The first tool with **no inputs at all**: every previous tool had one, so
+/// `read_stdin`/`is_terminal` was always involved. This is the path where it must
+/// not be — no stdin, no positional arg, and it still has to exit 0.
+#[test]
+fn uuid_runs_without_stdin() {
+    let out = lazytools()
+        .arg("uuid")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let uuid = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    assert_eq!(uuid.len(), 36, "expected a hyphenated UUID, got {uuid:?}");
+    let groups: Vec<usize> = uuid.split('-').map(str::len).collect();
+    assert_eq!(groups, vec![8, 4, 4, 4, 12], "bad UUID shape: {uuid}");
+    assert!(
+        uuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-'),
+        "bad UUID characters: {uuid}"
+    );
+}
+
+#[test]
+fn password_respects_length() {
+    let out = lazytools()
+        .args(["password", "--length", "40"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let password = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    assert_eq!(password.chars().count(), 40, "got {password:?}");
+}
+
+// --- Tools added in the v0.2 catalog expansion, batch 3 (web). ---
+
+/// The first tool with **two** inputs. The CLI allows only one stdin source, so
+/// `left` comes from the pipe and `right` from the second positional argument.
+#[test]
+fn json_diff_takes_left_from_stdin_and_right_from_arg() {
+    let out = lazytools()
+        .args(["json-diff", "-", r#"{"a":2}"#])
+        .write_stdin(r#"{"a":1}"#)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("-  \"a\": 1"), "{stdout}");
+    assert!(stdout.contains("+  \"a\": 2"), "{stdout}");
+}
+
+/// Key order must not register as a difference, even end-to-end.
+#[test]
+fn json_diff_ignores_key_order() {
+    lazytools()
+        .args(["json-diff", "-", r#"{"apple":2,"zebra":1}"#])
+        .write_stdin(r#"{"zebra":1,"apple":2}"#)
+        .assert()
+        .success()
+        .stdout("(identical)");
+}
+
+#[test]
+fn timestamp_converts_epoch_zero() {
+    let out = lazytools()
+        .args(["timestamp", "0", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains(r#""rfc3339":"1970-01-01T00:00:00+00:00""#),
+        "{stdout}"
+    );
+    assert!(stdout.contains(r#""unix_seconds":"0""#), "{stdout}");
+}
+
+#[test]
+fn url_parse_decodes_query_values() {
+    let out = lazytools()
+        .args([
+            "url-parse",
+            "https://u@example.com:8443/a/b?q=a%20b&x=1#top",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains(r#""host":"example.com""#), "{stdout}");
+    assert!(stdout.contains(r#""port":"8443""#), "{stdout}");
+    // Decoded, not `q=a%20b`.
+    assert!(stdout.contains(r"q=a b"), "query must be decoded: {stdout}");
+}
+
+#[test]
+fn help_lists_every_tool() {
     let out = lazytools()
         .arg("--help")
         .assert()
@@ -230,6 +377,20 @@ fn help_lists_all_eight_tools() {
         "hex",
         "json-format",
         "data-format",
+        "number-base",
+        "unicode",
+        "case",
+        "stats",
+        "jwt-decode",
+        "password",
+        "uuid",
+        "ulid",
+        "token",
+        "lorem",
+        "timestamp",
+        "cron",
+        "url-parse",
+        "json-diff",
     ] {
         assert!(
             stdout.contains(name),

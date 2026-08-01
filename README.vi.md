@@ -77,16 +77,54 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 
 ## Danh mục tool
 
+22 tool trên năm category — đúng cách nhóm mà sidebar của TUI đang dùng.
+
+**Crypto**
+
 | Lệnh | Mô tả |
 |---|---|
 | `hash` | Băm văn bản bằng MD5 / SHA-1 / SHA-256 / SHA-512 |
 | `hmac` | HMAC với khóa bí mật (SHA-1 / SHA-256 / SHA-512) |
 | `bcrypt` | Băm mật khẩu, hoặc kiểm tra hash có khớp không |
+
+**Convert**
+
+| Lệnh | Mô tả |
+|---|---|
 | `base64` | Văn bản ⇄ Base64, có tùy chọn bảng chữ cái URL-safe |
 | `url` | Percent-encode / decode chuỗi URL |
 | `hex` | Văn bản ⇄ hex |
 | `json-format` | Format hoặc minify JSON, giữ nguyên thứ tự khóa |
 | `data-format` | Chuyển đổi giữa JSON, YAML, TOML và CSV |
+| `number-base` | Chuyển số giữa nhị phân, bát phân, thập phân và hex |
+| `unicode` | Escape văn bản thành chuỗi Unicode, hoặc giải mã ngược lại |
+
+**Generate**
+
+| Lệnh | Mô tả |
+|---|---|
+| `password` | Sinh mật khẩu ngẫu nhiên |
+| `uuid` | Sinh UUID ngẫu nhiên (v4 hoặc v7 sắp theo thời gian) |
+| `ulid` | Sinh ULID sắp xếp được theo thứ tự từ điển |
+| `token` | Sinh token ngẫu nhiên N byte |
+| `lorem` | Sinh văn bản giả lorem ipsum |
+
+**Text**
+
+| Lệnh | Mô tả |
+|---|---|
+| `case` | Chuyển văn bản giữa camel, snake, kebab và các kiểu khác |
+| `stats` | Đếm ký tự, từ, dòng và byte trong văn bản |
+
+**Web**
+
+| Lệnh | Mô tả |
+|---|---|
+| `jwt-decode` | Giải mã JWT và tuỳ chọn xác minh chữ ký HMAC |
+| `timestamp` | Chuyển đổi giữa Unix timestamp và ngày giờ đọc được |
+| `cron` | Giải thích biểu thức cron và liệt kê các lần chạy kế tiếp |
+| `url-parse` | Tách URL thành các thành phần |
+| `json-diff` | So sánh hai tài liệu JSON theo cấu trúc |
 
 `lazytools <lệnh> --help` cho biết đầy đủ tùy chọn — phần trợ giúp đó **sinh
 thẳng từ khai báo của tool**, nên không bao giờ lệch với hành vi thật.
