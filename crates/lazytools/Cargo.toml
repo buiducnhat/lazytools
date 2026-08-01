@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
+homepage.workspace = true
 description = "A terminal utility belt — offline, keyboard-first. TUI plus CLI subcommands in one binary."
 readme = "../../README.md"
 keywords = ["tui", "cli", "terminal", "devtools", "utilities"]

@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
+homepage.workspace = true
 description = "Spec-driven tool registry powering lazytools — UI-framework-free core."
 readme = "../../README.md"
 keywords = ["hash", "encoding", "conversion", "devtools", "registry"]

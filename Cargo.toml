@@ -7,6 +7,8 @@ edition = "2024"
 license = "MIT"
 rust-version = "1.97"
 repository = "https://github.com/buiducnhat/lazytools"
+# Required by the generated Homebrew formula — dist warns without it.
+homepage = "https://github.com/buiducnhat/lazytools"
 
 [workspace.dependencies]
 # `version` is required alongside `path`: crates.io rejects a bare path dependency.
@@ -47,3 +49,8 @@ unicode-width = "0.2"
 
 assert_cmd = "2"
 insta = "1.48"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
