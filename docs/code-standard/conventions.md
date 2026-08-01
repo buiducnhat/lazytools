@@ -17,7 +17,9 @@ switcher) — code and its inline comments are not translated.
 
 - Edition 2024, `resolver = "3"` (declared once in the workspace `Cargo.toml`;
   member crates inherit `edition.workspace = true` / `license.workspace = true`).
-- Requires Rust 1.97 or newer.
+- Requires Rust 1.97 or newer, declared as `rust-version` in
+  `[workspace.package]` and pinned in `rust-toolchain.toml`. Raising the MSRV
+  means changing both — see [releasing.md](releasing.md#toolchain).
 - Shared dependency versions live in `[workspace.dependencies]` at the root;
   member `Cargo.toml` files reference them with `foo.workspace = true` rather
   than pinning their own versions.

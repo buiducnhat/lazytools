@@ -43,6 +43,27 @@ After editing `dist-workspace.toml`, run `dist init -y --hosting github` to
 regenerate the workflow. It is safe to re-run; it preserves settings and
 normalizes the file.
 
+## Toolchain
+
+`rust-toolchain.toml` pins the compiler to the MSRV (`1.97`) with the `rustfmt`
+and `clippy` components, for local builds, CI, and release builds alike.
+
+It is load-bearing, not cosmetic. `dist`'s generated workflow installs Rust
+**only inside containers** — on native macOS and Windows runners it uses
+whatever the runner image ships. The v0.1.0 release failed the first time
+because the `aarch64-apple-darwin` image carried rustc 1.96.0, below the
+declared MSRV, while every Linux target passed precisely because those build
+in containers with a freshly installed toolchain.
+
+Pinned to the MSRV rather than `stable` on purpose: `stable` means "whatever
+that runner happens to have", and a stale one is exactly what broke the first
+attempt. Pinning also makes CI verify the minimum version the crates
+advertise, instead of only ever testing a newer compiler.
+
+**If you raise `rust-version` in `Cargo.toml`, raise `channel` here too.** They
+are two halves of one claim, and a release build is where they diverging shows
+up.
+
 ## Targets
 
 Five targets are built:
