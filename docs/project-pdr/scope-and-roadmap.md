@@ -132,22 +132,66 @@ existing tools:
   that reorders keys is broken; a differ that reports a key swap as a change is
   useless. Array order stays significant in both.
 
+## The v0.2.x line — interaction debt
+
+With every declared category populated, the catalog stopped being the
+constraint. What was left was *interaction debt*, and it splits in two:
+
+- **Constraints leaking into tool specs.** The UI/CLI layer was forcing tools to
+  declare fields dishonestly, or forbidding field combinations outright. These
+  matter more than they look: [product-goals.md](product-goals.md) says a tool
+  needing UI changes is a design smell to be fixed at the abstraction, and this
+  is the same smell pointing the other way — the abstraction bending the tool.
+- **Additive comfort and portability.** Themes, session persistence, an OSC52
+  clipboard fallback for SSH.
+
+The leaks are being paid down first, each as its own patch release.
+
+### Delivered in `v0.2.1` — `Toggle` options can default to `true`
+
+`cli::apply_kind` mapped `Toggle` to `ArgAction::SetTrue` and carried a
+`debug_assert!` forbidding a `true` default outright, because `SetTrue` can only
+ever report "absent" — a field declaring `true` would have silently arrived as
+`false`, and there was no way to switch it back off.
+
+Every `Toggle` option now also generates a `--no-x` twin, the two declared
+`overrides_with` each other so passing both resolves POSIX-style (last one wins)
+instead of erroring. `cli::toggle_value` resolves the pair against the declared
+default. The twin is generated for *every* toggle rather than only those
+defaulting to `true`: a symmetric `--help` reads better than one where the
+negation appears only sometimes, and `--no-x` against a `false` default is
+merely explicit.
+
+Two decisions worth recording:
+
+- **`generate.password` keeps `--charset`.** Reverting it to three real
+  `Toggle`s was the obvious demonstration that the fix works — and it would have
+  removed `--charset` from a shipped CLI inside a *patch* release. The tool's
+  spec change waits for a version bump; the comment in `password.rs` now says
+  the workaround is compatibility, not capability.
+- **The invariant is pinned against a synthetic spec.** No shipped tool declares
+  a `true`-defaulting toggle yet, so `cli::tests` builds a throwaway `ToolSpec`
+  with one and asserts the resolution through `build_command` +
+  `collect_inputs`. End-to-end coverage rides on `convert.base64`'s `url_safe`,
+  the catalog's only real toggle.
+
 ## Explicitly out of scope
 
-Now that the v0.2 catalog work is delivered, what remains deferred is:
+Still deferred:
 
 - **Cross-session persistence** — the app does not remember which tool was
-  open or preserve input values between runs.
+  open or preserve input values between runs. Planned for the `v0.2.x` line;
+  note that `FieldKind::Secret` values (`crypto.hmac`'s key,
+  `crypto.bcrypt`'s password) must never be written to disk.
 - **`exp` / `nbf` validation in `web.jwt-decode`** — deliberately omitted so the
   tool stays a pure function of its input; decoding and expiry-checking are
   different jobs.
-- **`Toggle` options defaulting to `true` in the CLI** — `cli::apply_kind` maps
-  `Toggle` to `ArgAction::SetTrue`, which cannot express `--no-x`. Tools work
-  around it with a `Select` (see `generate.password`); lifting the limit is a
-  CLI-layer project of its own.
 - **`Enter` in a multiline field vs. `Enter` as the run key** — no shipped tool
   triggers the conflict (no `OnDemand`/`Generate` tool has a multiline field),
-  but the ambiguity is real and unresolved.
+  but the ambiguity is real and unresolved. It is a genuine constraint on the
+  catalog, not just a UX wrinkle: until it is settled, no `OnDemand` or
+  `Generate` tool can have a multiline field at all. Next up in the `v0.2.x`
+  line.
 - Image conversion, document conversion, any tool requiring network access,
   a plugin runtime, or a theme editor.
 - OSC52 clipboard fallback for SSH sessions.

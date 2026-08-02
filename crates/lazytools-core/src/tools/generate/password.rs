@@ -25,8 +25,12 @@ pub struct PasswordTool {
 impl Default for PasswordTool {
     fn default() -> Self {
         Self {
-            // A `charset` select rather than three toggles: the CLI can't express a
-            // `Toggle` that defaults to `true` (see `cli::apply_kind`), and one box
+            // A `charset` select rather than three toggles. The original reason — the
+            // CLI couldn't express a `Toggle` defaulting to `true` — no longer holds:
+            // every toggle now gets a `--no-x` twin (see `cli::toggle_value`). What
+            // keeps the `Select` here is compatibility: swapping it for toggles would
+            // remove `--charset` from a shipped CLI, so that change waits for a
+            // version bump rather than riding along with the fix. One box also still
             // beats three in the form.
             spec: ToolSpec::new("generate.password", "Password", Category::Generate)
                 .describe("Generate a random password")

@@ -63,9 +63,14 @@ property assertions.
 
 - **CLI** (`cli::build_subcommand`): iterates `spec.inputs`/`spec.options` and
   maps each `FieldKind` to a clap `Arg` (`Select` → `PossibleValuesParser`,
-  `Toggle` → `ArgAction::SetTrue`, `Number` → a ranged `value_parser`, etc.).
-  Subcommand name comes from `spec.cli_name()`, which strips the category
-  prefix (`crypto.hash` -> `hash`).
+  `Number` → a ranged `value_parser`, etc.). Subcommand name comes from
+  `spec.cli_name()`, which strips the category prefix (`crypto.hash` -> `hash`).
+  A `Toggle` option is the one kind that maps to **two** args: `--x` and a
+  generated `--no-x`, declared `overrides_with` each other so passing both is a
+  POSIX last-one-wins resolution rather than a usage error. `ArgAction::SetTrue`
+  can only report "absent", so the declared default is applied afterwards in
+  `cli::toggle_value` rather than through clap's `default_value` — which
+  `SetTrue` rejects, since the flag takes no value.
 - **TUI** (`ToolFormComponent`): builds one widget per field via the
   `components/field/` module (`text.rs`, `textarea.rs`, `number.rs`,
   `secret.rs`, `select.rs`, `toggle.rs`, `filepath.rs`), keyed off the same

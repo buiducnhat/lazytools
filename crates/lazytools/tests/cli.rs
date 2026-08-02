@@ -95,6 +95,50 @@ fn base64_decode() {
         .stdout("hello");
 }
 
+/// Every `Toggle` gets a `--no-x` twin. `url_safe` defaults to `false`, so this is
+/// the redundant-but-explicit direction — it must still be accepted, and must agree
+/// with passing nothing at all. (`???` is chosen because its standard-alphabet
+/// encoding ends in `/`, which is exactly the character the URL-safe alphabet swaps.)
+#[test]
+fn base64_negated_toggle_matches_the_default() {
+    lazytools()
+        .args(["base64", "--no-url-safe"])
+        .write_stdin("???")
+        .assert()
+        .success()
+        .stdout("Pz8/");
+}
+
+#[test]
+fn base64_url_safe_toggle() {
+    lazytools()
+        .arg("base64")
+        .args(["--url-safe"])
+        .write_stdin("???")
+        .assert()
+        .success()
+        .stdout("Pz8_");
+}
+
+/// `--x` and `--no-x` override each other POSIX-style rather than conflicting, so
+/// passing both is legal and the last one on the line decides.
+#[test]
+fn base64_toggle_halves_override_each_other() {
+    lazytools()
+        .args(["base64", "--url-safe", "--no-url-safe"])
+        .write_stdin("???")
+        .assert()
+        .success()
+        .stdout("Pz8/");
+
+    lazytools()
+        .args(["base64", "--no-url-safe", "--url-safe"])
+        .write_stdin("???")
+        .assert()
+        .success()
+        .stdout("Pz8_");
+}
+
 #[test]
 fn hex_encode() {
     lazytools()

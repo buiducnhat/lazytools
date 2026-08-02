@@ -47,7 +47,7 @@ Product goals, use cases, business rules, and constraints.
 | File | Description |
 | ---- | ------------ |
 | [product-goals.md](project-pdr/product-goals.md) | Central design thesis (open tool catalog, cost-of-addition must stay flat) and the two times it was measured, pipeline-first CLI contract, reliability expectations |
-| [scope-and-roadmap.md](project-pdr/scope-and-roadmap.md) | What shipped in the MVP, the three v0.2 catalog batches and their design decisions, and what remains explicitly out of scope |
+| [scope-and-roadmap.md](project-pdr/scope-and-roadmap.md) | What shipped in the MVP, the three v0.2 catalog batches and their design decisions, the v0.2.x interaction-debt line, and what remains explicitly out of scope |
 
 ## Other
 

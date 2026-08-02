@@ -92,11 +92,12 @@ are not stylistic:
   request while focus is on an *editable* field, so a tool with no inputs and no
   options can never be re-triggered — it would generate exactly once and be
   stuck there.
-- **Don't use a `Toggle` that defaults to `true`.** The CLI layer maps `Toggle`
-  to `ArgAction::SetTrue`, which implies a `false` default; `cli::apply_kind`
-  has a `debug_assert!` that rejects anything else. Reach for a `Select` instead
-  — `generate.password` uses a `charset` select rather than three toggles for
-  exactly this reason.
+- **A `Toggle` may default to `true`.** Every toggle option gets a generated
+  `--no-x` twin (`cli::build_subcommand`), and `cli::toggle_value` resolves the
+  pair against the declared default, so `--symbols` / `--no-symbols` both work
+  regardless of which way the field points. `generate.password` still uses a
+  `charset` select rather than three toggles, but only for CLI compatibility —
+  no longer because the CLI can't express it.
 - **Return `Ok` for the default inputs.** `spec_invariants::declared_outputs_are_actually_produced`
   tolerates an `InvalidInput` rejection but not a `Failed` or a panic, and a
   generator has no reason to reject its own defaults.
