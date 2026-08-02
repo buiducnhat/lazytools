@@ -10,8 +10,14 @@ dùng được thẳng trong shell pipeline.
 $ echo -n "hello world" | lazytools hash --algo md5
 5eb63bbbe01eeed093cb22bb8f5acdc3
 
-$ echo -n "hello" | lazytools base64
-aGVsbG8=
+$ echo -n "userIdFromDB" | lazytools case --style kebab
+user-id-from-db
+
+$ lazytools uuid
+2bc10bd9-f274-45ac-ba91-2e875e385330
+
+$ lazytools timestamp 1700000000 --json | jq -r .relative
+2 years ago
 
 $ lazytools data-format --from json --to yaml config.json > config.yaml
 ```
@@ -19,19 +25,36 @@ $ lazytools data-format --from json --to yaml config.json > config.yaml
 Gõ `lazytools` không tham số để mở giao diện:
 
 ```
-┌ Tools ───────────────┐┌ Hash Text ─────────────────────────────────────┐
-│Crypto                ││┌ Input ───────────────────────────────────────┐│
-│  Hash Text           │││hello world                                   ││
-│  HMAC                ││└──────────────────────────────────────────────┘│
-│  Bcrypt              ││┌ Algorithm ───────────────────────────────────┐│
-│Convert               │││‹ md5 ›                                       ││
-│  Base64              ││└──────────────────────────────────────────────┘│
-│  URL Encode          ││┌ Digest ──────────────────────────────────────┐│
-│  Hex                 │││5eb63bbbe01eeed093cb22bb8f5acdc3              ││
-│  JSON Format         ││└──────────────────────────────────────────────┘│
-│  Data Format         ││                                                │
-└──────────────────────┘└────────────────────────────────────────────────┘
-[Tab] next field [^P] palette [y] copy [?] help [q] quit
+┌ Tools ───────────────┐┌ Hash Text ───────────────────────────────────────────────────┐
+│Crypto                ││┌ Input ─────────────────────────────────────────────────────┐│
+│  Hash Text           │││hello world                                                 ││
+│  HMAC                │││                                                            ││
+│  Bcrypt              │││                                                            ││
+│Convert               │││                                                            ││
+│  Base64              │││                                                            ││
+│  URL Encode          │││                                                            ││
+│  Hex                 ││└────────────────────────────────────────────────────────────┘│
+│  JSON Format         ││┌ Algorithm ─────────────────────────────────────────────────┐│
+│  Data Format         │││‹ md5 ›                                                     ││
+│  Number Base         ││└────────────────────────────────────────────────────────────┘│
+│  Unicode Escape      ││┌ Digest ────────────────────────────────────────────────────┐│
+│Generate              │││5eb63bbbe01eeed093cb22bb8f5acdc3                            ││
+│  Password            ││└────────────────────────────────────────────────────────────┘│
+│  UUID                ││                                                              │
+│  ULID                ││                                                              │
+│  Random Token        ││                                                              │
+│  Lorem Ipsum         ││                                                              │
+│Text                  ││                                                              │
+│  Change Case         ││                                                              │
+│  Text Stats          ││                                                              │
+│Web                   ││                                                              │
+│  JWT Decode          ││                                                              │
+│  Timestamp           ││                                                              │
+│  Cron Explainer      ││                                                              │
+│  URL Parser          ││                                                              │
+│  JSON Diff           ││                                                              │
+└──────────────────────┘└──────────────────────────────────────────────────────────────┘
+[Tab] next field [^P] palette [^O] open file [^S] save file [y] copy [?] help [q] quit
 ```
 
 > Lưu ý: giao diện TUI hiện chỉ hiển thị tiếng Anh (xem phần "Phím tắt" bên dưới
@@ -146,7 +169,7 @@ Nhãn phím trong TUI hiển thị bằng tiếng Anh; bảng dưới đây dị
 | `j` `k` / `↑` `↓` | `select` | Di chuyển trong sidebar |
 | `Ctrl+P` | `palette` | Palette tìm tool (khớp mờ trên tên, từ khóa, mô tả) |
 | `y` | `copy` | Copy output đang chọn |
-| `Ctrl+O` / `Ctrl+S` | `open file` / `save file` | Mở file vào input / lưu output ra file |
+| `Ctrl+O` / `Ctrl+S` | `open file` / `save file` | Mở file vào input / lưu output ra file (`Ctrl+O` bị ẩn với tool không có input) |
 | `?` | `help` | Trợ giúp |
 | `q` | `quit` | Thoát |
 
@@ -213,19 +236,30 @@ cũng vậy.
 ### Vì sao lại được như thế
 
 `lazytools-core` không phụ thuộc ratatui/crossterm/clap. Mỗi tool chỉ khai một
-`ToolSpec` (mô tả field) và một hàm thuần `Inputs → Outputs`. Cả hai frontend
+`ToolSpec` (mô tả field) và một hàm `Inputs → Outputs` duy nhất. Cả hai frontend
 đều **đọc** spec đó chứ không hard-code gì:
 
 - `ToolFormComponent` dựng widget theo từng `FieldKind`.
 - Tầng CLI dựng subcommand + flag từ cùng spec ấy.
 
 Hệ quả: chỉ có một nguồn sự thật, và chi phí thêm tool thứ 40 cũng ngang tool
-thứ 4. Có test bất biến (`crates/lazytools-core/tests/spec_invariants.rs`) duyệt
-toàn bộ registry để giữ tính chất này khỏi trôi.
+thứ 4. Điều đó **đo được**, và đã được đo: bản v0.2.0 đưa catalog từ 8 lên 22
+tool, và qua cả ba đợt thêm tool thì `git diff crates/lazytools/src/` đều trả về
+**rỗng**. Có test bất biến (`crates/lazytools-core/tests/spec_invariants.rs`)
+duyệt toàn bộ registry để giữ tính chất này khỏi trôi.
 
-`RunMode::OnDemand` dành cho tool chạy chậm (bcrypt cost 12 mất ~250ms) — khai
-trong spec để ràng buộc hiển hiện ngay lúc viết tool, thay vì thành một sự cố
-giật UI phát hiện sau.
+`RunMode` được khai theo từng tool để hành vi được quyết định ngay lúc viết tool,
+thay vì thành một sự cố giật UI phát hiện sau:
+
+- `Live` chạy lại sau mỗi lần sửa, có debounce. Đây là mặc định.
+- `OnDemand` đợi phím xác nhận — dành cho tool chạy chậm, như bcrypt cost 12
+  (~250ms).
+- `Generate` chạy khi mở **và** chạy lại khi bấm phím xác nhận, để một tool sinh
+  ngẫu nhiên có thể đưa bạn mật khẩu khác mà không cần sửa gì.
+
+Các tool là hàm thuần với đúng hai ngoại lệ có chủ đích: nhóm sinh ngẫu nhiên, và
+nhóm đọc đồng hồ (`timestamp`, `cron`). Cả hai được kiểm thử theo **thuộc tính** —
+độ dài, bảng ký tự, thứ tự — chứ không so với giá trị cố định.
 
 ## Phát triển
 

@@ -11,6 +11,28 @@ with hand-built `Inputs`. No frontend, no I/O. This is the default and
 cheapest layer — cover known vectors, edge cases, and every `ToolError`
 variant a tool can return here.
 
+Convention: a local `fn run(...) -> Result<Outputs, ToolError>` helper that
+builds `Inputs` with `.with()`, plus a `fn ok(...) -> String` for the happy
+path. (`gen` is a reserved keyword in edition 2024 — don't name a helper that.)
+
+### Testing tools that aren't pure
+
+Random generators and the clock-reading Web tools have no fixed expected
+output, so assert **properties** instead of values: the requested length, that
+every character is in the requested alphabet, the line count, the ordering.
+
+Property tests earn their keep — they are not a weaker substitute. The
+`generate.ulid` ordering test failed on first run and was right to: bare
+`Ulid::generate()` only orders by millisecond, so a batch produced inside one
+millisecond came out visibly unsorted, in a tool whose entire selling point is
+that its values sort. Length-and-alphabet assertions alone would have shipped
+that. Pick the property that would actually be embarrassing to get wrong.
+
+For a tool with both a pure and an impure branch (`web.timestamp` is pure for
+any explicit value, clock-dependent only when the input is empty), test the
+pure branch against fixed vectors and reserve property assertions for the
+clock branch.
+
 ## 2. Spec invariants (`crates/lazytools-core/tests/spec_invariants.rs`)
 
 Integration test that walks `Registry::new()` and checks properties that must
@@ -45,10 +67,27 @@ Construct `App` directly (importable because the app logic lives in
   **Regenerate snapshots whenever you intentionally change UI text or
   layout** — a snapshot diff is the point, not a failure to work around.
 
-Debounce-dependent tests (anything exercising `RunMode::Live`) sleep past the
-~80ms debounce window and call `app.tick()` explicitly rather than polling —
-keep that pattern for new tests in this file rather than adding real-time
-polling loops.
+**Adding a tool breaks six snapshot tests, and that is expected.** Most tests
+in `snapshots.rs` build `App::new(Registry::new())` — the *real* registry — so
+any new tool changes the sidebar in every one of them. Don't "fix" this by
+switching those tests to `Registry::from_tools`: they exist to catch layout
+regressions in the real app, and isolating them from the registry would throw
+away exactly what they protect. Read the diff, confirm it is sidebar-only, then
+accept.
+
+Use `Registry::from_tools` with a locally-defined test tool only when the test
+is about a *capability* rather than the shipped catalog — covering every
+`FieldKind`, or exercising `RunMode::Generate` with an `AtomicUsize` run
+counter so the assertion is "it ran twice", not a random value.
+
+When adding a regression test for a bug, prove it fails without the fix before
+committing it. Temporarily revert the fix, watch the test go red, restore.
+A regression test that would pass either way documents nothing.
+
+Debounce-dependent tests (anything exercising `RunMode::Live` or
+`RunMode::Generate`) sleep past the ~80ms debounce window and call `app.tick()`
+explicitly rather than polling — keep that pattern for new tests in this file
+rather than adding real-time polling loops.
 
 ## Running everything
 

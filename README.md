@@ -10,8 +10,14 @@ working directly in shell pipelines.
 $ echo -n "hello world" | lazytools hash --algo md5
 5eb63bbbe01eeed093cb22bb8f5acdc3
 
-$ echo -n "hello" | lazytools base64
-aGVsbG8=
+$ echo -n "userIdFromDB" | lazytools case --style kebab
+user-id-from-db
+
+$ lazytools uuid
+2bc10bd9-f274-45ac-ba91-2e875e385330
+
+$ lazytools timestamp 1700000000 --json | jq -r .relative
+2 years ago
 
 $ lazytools data-format --from json --to yaml config.json > config.yaml
 ```
@@ -19,19 +25,36 @@ $ lazytools data-format --from json --to yaml config.json > config.yaml
 Run `lazytools` with no arguments to open the interface:
 
 ```
-┌ Tools ───────────────┐┌ Hash Text ─────────────────────────────────────┐
-│Crypto                ││┌ Input ───────────────────────────────────────┐│
-│  Hash Text           │││hello world                                   ││
-│  HMAC                ││└──────────────────────────────────────────────┘│
-│  Bcrypt              ││┌ Algorithm ───────────────────────────────────┐│
-│Convert               │││‹ md5 ›                                       ││
-│  Base64              ││└──────────────────────────────────────────────┘│
-│  URL Encode          ││┌ Digest ──────────────────────────────────────┐│
-│  Hex                 │││5eb63bbbe01eeed093cb22bb8f5acdc3              ││
-│  JSON Format         ││└──────────────────────────────────────────────┘│
-│  Data Format         ││                                                │
-└──────────────────────┘└────────────────────────────────────────────────┘
-[Tab] next field [^P] palette [y] copy [?] help [q] quit
+┌ Tools ───────────────┐┌ Hash Text ───────────────────────────────────────────────────┐
+│Crypto                ││┌ Input ─────────────────────────────────────────────────────┐│
+│  Hash Text           │││hello world                                                 ││
+│  HMAC                │││                                                            ││
+│  Bcrypt              │││                                                            ││
+│Convert               │││                                                            ││
+│  Base64              │││                                                            ││
+│  URL Encode          │││                                                            ││
+│  Hex                 ││└────────────────────────────────────────────────────────────┘│
+│  JSON Format         ││┌ Algorithm ─────────────────────────────────────────────────┐│
+│  Data Format         │││‹ md5 ›                                                     ││
+│  Number Base         ││└────────────────────────────────────────────────────────────┘│
+│  Unicode Escape      ││┌ Digest ────────────────────────────────────────────────────┐│
+│Generate              │││5eb63bbbe01eeed093cb22bb8f5acdc3                            ││
+│  Password            ││└────────────────────────────────────────────────────────────┘│
+│  UUID                ││                                                              │
+│  ULID                ││                                                              │
+│  Random Token        ││                                                              │
+│  Lorem Ipsum         ││                                                              │
+│Text                  ││                                                              │
+│  Change Case         ││                                                              │
+│  Text Stats          ││                                                              │
+│Web                   ││                                                              │
+│  JWT Decode          ││                                                              │
+│  Timestamp           ││                                                              │
+│  Cron Explainer      ││                                                              │
+│  URL Parser          ││                                                              │
+│  JSON Diff           ││                                                              │
+└──────────────────────┘└──────────────────────────────────────────────────────────────┘
+[Tab] next field [^P] palette [^O] open file [^S] save file [y] copy [?] help [q] quit
 ```
 
 ## Install
@@ -142,7 +165,7 @@ actual behavior.
 | `j` `k` / `↑` `↓` | Move within the sidebar |
 | `Ctrl+P` | Tool-finder palette (fuzzy match on name, keywords, description) |
 | `y` | Copy the currently focused output |
-| `Ctrl+O` / `Ctrl+S` | Open a file into the input / save output to a file |
+| `Ctrl+O` / `Ctrl+S` | Open a file into the input / save output to a file (`Ctrl+O` is hidden for tools that take no input) |
 | `?` | Help |
 | `q` | Quit |
 
@@ -204,20 +227,32 @@ and so is the CLI subcommand.
 ### Why it's built this way
 
 `lazytools-core` has no dependency on ratatui/crossterm/clap. Each tool declares
-only a `ToolSpec` (describing its fields) and a pure `Inputs → Outputs` function.
+only a `ToolSpec` (describing its fields) and one `Inputs → Outputs` function.
 Both frontends **read** that spec instead of hard-coding anything:
 
 - `ToolFormComponent` builds a widget per `FieldKind`.
 - The CLI layer builds subcommands + flags from that same spec.
 
 The consequence: there is a single source of truth, and the cost of adding the
-40th tool is about the same as the 4th. An invariant test
+40th tool is about the same as the 4th. That is measurable, and it has been
+measured — the v0.2.0 release took the catalog from 8 tools to 22, and across
+all three batches of new tools `git diff crates/lazytools/src/` came back
+**empty**. An invariant test
 (`crates/lazytools-core/tests/spec_invariants.rs`) walks the whole registry to
-keep this property from drifting.
+keep the property from drifting.
 
-`RunMode::OnDemand` is for slow tools (bcrypt at cost 12 takes ~250ms) —
-declared in the spec so the cost is visible right when the tool is written,
-instead of turning into a UI-jank incident discovered later.
+`RunMode` is declared per tool so behavior is decided when the tool is written
+rather than discovered as UI jank later:
+
+- `Live` re-runs on every edit, debounced. The default.
+- `OnDemand` waits for the confirm key — for slow tools, like bcrypt at cost 12
+  (~250ms).
+- `Generate` runs on open *and* re-runs on the confirm key, so a random
+  generator can hand you a different password without editing anything.
+
+Tools are pure functions with two deliberate exceptions: random generators, and
+the tools that read the clock (`timestamp`, `cron`). Both are tested by
+property — length, alphabet, ordering — rather than against fixed values.
 
 ## Development
 

@@ -17,9 +17,9 @@ System design, component interactions, data flows, deployment, and external inte
 
 | File | Description |
 | ---- | ------------ |
-| [spec-driven-tools.md](architecture/spec-driven-tools.md) | How `ToolSpec` + the `Tool` trait let the CLI and TUI both generate themselves from one declaration per tool |
+| [spec-driven-tools.md](architecture/spec-driven-tools.md) | How `ToolSpec` + the `Tool` trait let the CLI and TUI both generate themselves from one declaration per tool; the three `RunMode`s and the two deliberate exceptions to `run()` purity |
 | [tui-event-loop.md](architecture/tui-event-loop.md) | `Component`/`DrawableComponent` pattern, event routing order, focus/layout, the internal event queue, and the 16ms poll/debounce loop |
-| [file-io.md](architecture/file-io.md) | Open/save file popups: size limits, overwrite confirmation, missing-parent-directory handling |
+| [file-io.md](architecture/file-io.md) | Open/save file popups: size limits, overwrite confirmation, missing-parent-directory handling, and why tools with no inputs refuse "open file" |
 
 ## Codebase
 
@@ -27,7 +27,7 @@ Directory structure, entry points, API patterns, and key modules.
 
 | File | Description |
 | ---- | ------------ |
-| [directory-layout.md](codebase/directory-layout.md) | Full workspace tree (`lazytools-core` vs `lazytools`), entry point (`main.rs`), and why app logic lives in `lib.rs` |
+| [directory-layout.md](codebase/directory-layout.md) | Full workspace tree (`lazytools-core` vs `lazytools`), the per-category `tools/` layout, entry point (`main.rs`), and why app logic lives in `lib.rs` |
 
 ## Code Standard
 
@@ -36,8 +36,8 @@ Conventions, naming rules, tech stack versions, and development workflows.
 | File | Description |
 | ---- | ------------ |
 | [conventions.md](code-standard/conventions.md) | Language (English-only code/comments/UI text), edition/toolchain, crate boundary rule, error-handling conventions, naming |
-| [adding-a-tool.md](code-standard/adding-a-tool.md) | Step-by-step for adding a new tool, `ToolSpec` content conventions, and the invariants CI enforces |
-| [testing-conventions.md](code-standard/testing-conventions.md) | The four test layers (tool unit tests, spec invariants, CLI end-to-end, TUI/snapshot) and when to use each |
+| [adding-a-tool.md](code-standard/adding-a-tool.md) | Step-by-step for adding a new tool, `ToolSpec` content conventions, the extra rules for generators, and the invariants CI enforces |
+| [testing-conventions.md](code-standard/testing-conventions.md) | The four test layers (tool unit tests, spec invariants, CLI end-to-end, TUI/snapshot), how to test tools that aren't pure, and why adding a tool is expected to break six snapshots |
 | [releasing.md](code-standard/releasing.md) | How a release is cut: dist config, the tag-driven pipeline, crates.io publish ordering, and why crates.io goes last |
 
 ## Project PDR
@@ -46,8 +46,8 @@ Product goals, use cases, business rules, and constraints.
 
 | File | Description |
 | ---- | ------------ |
-| [product-goals.md](project-pdr/product-goals.md) | Central design thesis (open tool catalog, cost-of-addition must stay flat), pipeline-first CLI contract, reliability expectations |
-| [scope-and-roadmap.md](project-pdr/scope-and-roadmap.md) | What shipped in the MVP vs. what's explicitly deferred to v0.2 |
+| [product-goals.md](project-pdr/product-goals.md) | Central design thesis (open tool catalog, cost-of-addition must stay flat) and the two times it was measured, pipeline-first CLI contract, reliability expectations |
+| [scope-and-roadmap.md](project-pdr/scope-and-roadmap.md) | What shipped in the MVP, the three v0.2 catalog batches and their design decisions, and what remains explicitly out of scope |
 
 ## Other
 

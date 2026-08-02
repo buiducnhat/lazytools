@@ -47,7 +47,10 @@ is optimized for: **one new file + one line**, no changes to the TUI or CLI laye
 
 4. Add a `#[cfg(test)] mod tests` block in the same file exercising `run()`
    directly (see [testing-conventions.md](testing-conventions.md)) — no TUI or
-   CLI harness needed, since `run()` is a pure function.
+   CLI harness needed, since `run()` takes `Inputs` and returns `Outputs` with
+   nothing else in the loop. (Most tools are also pure, so a fixed expected
+   value works; generators and clock-reading tools are asserted by property
+   instead — see "Writing a generator" below.)
 
 Done — the tool now shows up in the sidebar, the `Ctrl+P` palette, and
 `lazytools --help`/`lazytools <name> --help`, with no other file touched.

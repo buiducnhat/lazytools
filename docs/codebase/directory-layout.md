@@ -3,6 +3,10 @@
 Two-crate Cargo workspace (`Cargo.toml` at the repo root, `resolver = "3"`,
 edition 2024).
 
+The subdirectory names under `tools/` are the five `spec::Category` variants.
+Adding a category means adding a directory here *and* a variant there — those
+two are expected to stay in lockstep.
+
 ```
 crates/
   lazytools-core/         # pure tool logic — no ratatui/crossterm/clap
@@ -12,10 +16,15 @@ crates/
       registry.rs          # Tool trait, Registry (lookup + panic-safe run())
       spec.rs              # ToolSpec, Field, FieldKind, Category, RunMode
       value.rs              # Inputs/Outputs/Value — the data tools exchange
-      tools/
+      tools/                # one subdirectory per Category, one file per tool
         mod.rs              # register_all() — the ONLY place every tool is listed
         crypto/             # hash.rs, hmac.rs, bcrypt.rs
-        convert/            # base64.rs, url.rs, hex.rs, json_fmt.rs, data_format.rs
+        convert/            # base64.rs, url.rs, hex.rs, json_fmt.rs,
+                            #   data_format.rs, number_base.rs, unicode.rs
+        generate/           # password.rs, uuid.rs, ulid.rs, token.rs, lorem.rs
+        text/               # case.rs, stats.rs
+        web/                # jwt_decode.rs, timestamp.rs, cron.rs,
+                            #   url_parse.rs, json_diff.rs
     tests/
       spec_invariants.rs    # registry-wide invariants (see code-standard/testing-conventions.md)
 

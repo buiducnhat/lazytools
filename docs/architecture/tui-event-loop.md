@@ -80,6 +80,19 @@ matters on open: auto-running `bcrypt` there would block the UI thread for
 tool is effectively on-demand (natively, or downgraded by large input), a badge
 under the fields prompts pressing Enter, so an empty output never looks broken.
 
+A `Generate` tool sits between the two: it auto-runs like `Live`, but the
+confirm key *also* re-runs it, producing a new random value. Its badge reads
+"regenerate" rather than "run". Two constraints follow from how the loop works
+and are easy to trip over when adding a generator:
+
+- `ToolFormComponent::event` only fires a run request while focus is on an
+  **editable** field, so a tool with no inputs *and* no options can never be
+  re-triggered — it would generate once and be stuck. Every generator therefore
+  declares at least one option.
+- The 256KB downgrade never applies to `Generate`, because such a tool has only
+  small options and can't reach the threshold. `is_downgraded()` deliberately
+  still tests `mode == Live` only.
+
 On Windows, crossterm reports both key-press and key-release events; only
 `KeyEventKind::Press` is handled, to avoid double-processing every keystroke.
 

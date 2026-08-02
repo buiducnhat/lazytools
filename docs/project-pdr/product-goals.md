@@ -14,14 +14,26 @@ The tool catalog is an **open set** that is expected to keep growing. If the
 cost of adding a tool scaled linearly with each addition (touching the TUI,
 the CLI, and the core logic separately), the project would become
 unmaintainable somewhere around the 20th tool. The whole architecture — a
-`ToolSpec` + pure `run()` function per tool, with both the TUI and CLI
+`ToolSpec` + a single `run()` function per tool, with both the TUI and CLI
 generated from that spec — exists specifically to keep the marginal cost of
 tool #40 about the same as tool #4.
 
-This was validated during the MVP build: adding all 7 remaining tools in
-Phase 4 changed zero lines in `crates/lazytools/src/` (the entire UI/CLI
-layer) — only `tools/mod.rs` registration, per-tool files, and per-tool
-`Cargo.toml` dependencies changed. See
+The claim is **machine-checkable**, and it has been checked twice:
+
+- **MVP:** adding the last 7 tools changed zero lines in
+  `crates/lazytools/src/` (the entire UI/CLI layer).
+- **v0.2.0:** the catalog went 8 → 22, past the 20-tool mark where the
+  linear-cost version of this project would have stalled. Across the three
+  tool-adding batches — 14 tools, including the first with no inputs and the
+  first that aren't pure functions — `git diff crates/lazytools/src/` stayed
+  **empty**. All 75 UI lines that did change belong to a separate batch that
+  added no tools at all, and were spent on `RunMode::Generate` plus one bug
+  fix.
+
+That separation is the useful signal: UI work is driven by genuinely new
+*interaction semantics*, not by tool count. Keep it that way — if adding a tool
+requires touching `crates/lazytools/src/`, treat it as a design smell and fix
+the abstraction rather than the symptom. See
 [docs/architecture/spec-driven-tools.md](../architecture/spec-driven-tools.md)
 for how that's achieved.
 

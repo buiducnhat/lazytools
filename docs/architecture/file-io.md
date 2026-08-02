@@ -16,6 +16,16 @@ strictly a UI-layer concern, handled by two popups in
   `tool_form.set_primary_input()`, which loads the content into the currently
   open tool's first input field and triggers a rerun — exactly as if the user
   had pasted the text.
+- **A tool with no inputs at all cannot receive a file.** Every generator
+  (`Category::Generate`) is in that position, and `set_primary_input` used to
+  write into `widgets.first_mut()` unconditionally — which for those tools is
+  the first *option*, so `Ctrl+O` dumped a whole file into e.g. a `length` box.
+  Three guards now cover it: `set_primary_input` returns early,
+  `App::event` shows an error instead of opening the picker, and
+  `App::app_commands` omits the "open file" hint entirely so the command bar
+  never advertises a key that does nothing. The last one is the same
+  never-let-hints-drift rule as everything else generated from
+  `Component::commands()`.
 
 ## Saving a file (`file_save.rs`)
 
