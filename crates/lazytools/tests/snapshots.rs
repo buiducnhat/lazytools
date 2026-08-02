@@ -97,6 +97,13 @@ fn large_input_downgrades_to_on_demand() {
     let mut terminal = terminal(90, 30);
     let mut app = App::new(Registry::new());
 
+    // Drain the run request `set_tool` queued on open, while the input is still
+    // empty. Without this the deadline survives the paste below and the very first
+    // `tick()` hashes all 300KB — which is what this test is supposed to prove does
+    // *not* happen. In the real event loop the 16ms poll clears it long before a
+    // human can paste, so this is a test-harness artifact, not a user-facing path.
+    app.tick();
+
     app.event(&key(KeyCode::Tab)).expect("tab");
     app.process_queue().expect("queue");
 
@@ -104,29 +111,58 @@ fn large_input_downgrades_to_on_demand() {
         .expect("paste large chunk");
     app.process_queue().expect("queue");
 
+    // md5 of 307200 'a' characters.
+    let expected = {
+        use md5::{Digest, Md5};
+        hex::encode(Md5::digest("a".repeat(300 * 1024).as_bytes()))
+    };
+
     // Past the debounce threshold and it still doesn't auto-run — that's the intended behavior.
     std::thread::sleep(Duration::from_millis(150));
     app.tick();
     let screen = draw(&mut terminal, &mut app);
     assert!(
         screen.contains("large input"),
-        "must show the badge prompting Enter:\n{screen}"
+        "must show the badge prompting the run key:\n{screen}"
+    );
+    assert!(
+        !screen.contains(&expected),
+        "the downgrade must stop the 300KB hash from running on its own:\n{screen}"
     );
 
-    // Only pressing Enter runs it, and runs it correctly.
+    // Focus is on the multiline Input, so `Enter` belongs to the field: it inserts a
+    // line break and must NOT be hijacked into running the tool. This is the whole
+    // point of the fix — the downgrade used to repurpose `Enter` underneath the very
+    // field the user was still editing.
     app.event(&key(KeyCode::Enter)).expect("enter");
     app.process_queue().expect("queue");
     app.tick();
     let screen = draw(&mut terminal, &mut app);
+    assert!(
+        !screen.contains(&expected),
+        "Enter in a multiline field must edit it, not run the tool:\n{screen}"
+    );
 
-    // md5 of 307200 'a' characters.
-    let expected = {
+    // The run key works from any field, and runs it correctly.
+    app.event(&ctrl(KeyCode::Char('r'))).expect("run key");
+    app.process_queue().expect("queue");
+    app.tick();
+    let screen = draw(&mut terminal, &mut app);
+    assert!(
+        screen.contains("large input"),
+        "the badge must still name the run key:\n{screen}"
+    );
+
+    // The newline inserted above is part of the input now, so hash that exact text.
+    let with_newline = {
         use md5::{Digest, Md5};
-        hex::encode(Md5::digest("a".repeat(300 * 1024).as_bytes()))
+        hex::encode(Md5::digest(
+            format!("{}\n", "a".repeat(300 * 1024)).as_bytes(),
+        ))
     };
     assert!(
-        screen.contains(&expected),
-        "after pressing Enter the digest {expected} must be present:\n{screen}"
+        screen.contains(&with_newline),
+        "the run key must hash the edited text (300KB + the newline):\n{screen}"
     );
 }
 
@@ -459,5 +495,106 @@ fn copy_key_still_types_inside_an_editable_field() {
     assert!(
         screen.contains("a6105c0a611b41b08f1209506350279e"),
         "the tool must run on exactly the typed string:\n{screen}"
+    );
+}
+
+/// Test-only tool for the combination the UI layer used to forbid: a **multiline
+/// input on an `OnDemand` tool**. Before the confirm key was handed to the focused
+/// widget first, `ToolFormComponent` swallowed `Enter` as "run", so such a field
+/// could never receive a line break and no tool could declare one.
+///
+/// `run()` reports the line count, so the test asserts the newlines actually landed
+/// in the field rather than trusting the rendered box.
+struct MultilineOnDemandTool {
+    spec: ToolSpec,
+}
+
+impl Default for MultilineOnDemandTool {
+    fn default() -> Self {
+        Self {
+            spec: ToolSpec::new("text.multi", "Multi", Category::Text)
+                .describe("test-only multiline OnDemand tool")
+                .input(Field::text("text").multiline().label("Input"))
+                .output(Field::text("result").label("Result"))
+                .mode(RunMode::OnDemand),
+        }
+    }
+}
+
+impl Tool for MultilineOnDemandTool {
+    fn spec(&self) -> &ToolSpec {
+        &self.spec
+    }
+    fn run(&self, i: &Inputs) -> Result<Outputs, ToolError> {
+        Ok(Outputs::one(
+            "result",
+            format!("lines={}", i.text("text").lines().count()),
+        ))
+    }
+}
+
+#[test]
+fn multiline_field_on_an_on_demand_tool_gets_its_newlines() {
+    let registry = Registry::from_tools(vec![Box::new(MultilineOnDemandTool::default())]);
+    let mut terminal = terminal(80, 24);
+    let mut app = App::new(registry);
+
+    app.event(&key(KeyCode::Tab)).expect("tab into form");
+    app.process_queue().expect("queue");
+
+    // Three lines, typed the way a user would: text, Enter, text, Enter, text.
+    for (i, word) in ["one", "two", "three"].iter().enumerate() {
+        if i > 0 {
+            app.event(&key(KeyCode::Enter)).expect("newline");
+            app.process_queue().expect("queue");
+        }
+        for c in word.chars() {
+            app.event(&key(KeyCode::Char(c))).expect("type");
+        }
+        app.process_queue().expect("queue");
+    }
+
+    // An OnDemand tool must still be idle — none of those Enters may have run it.
+    std::thread::sleep(Duration::from_millis(150));
+    app.tick();
+    let screen = draw(&mut terminal, &mut app);
+    assert!(
+        !screen.contains("lines="),
+        "Enter must not have run an OnDemand tool:\n{screen}"
+    );
+
+    app.event(&ctrl(KeyCode::Char('r'))).expect("run key");
+    app.process_queue().expect("queue");
+    app.tick();
+    let screen = draw(&mut terminal, &mut app);
+    assert!(
+        screen.contains("lines=3"),
+        "all three lines must have reached the tool:\n{screen}"
+    );
+}
+
+/// The run key must work with focus on a read-only output too. `Enter` never could:
+/// the old branch required an *editable* field, so a user looking at the result had
+/// to Tab back into an input just to re-run.
+#[test]
+fn run_key_works_from_a_read_only_output() {
+    let registry = Registry::from_tools(vec![Box::new(MultilineOnDemandTool::default())]);
+    let mut terminal = terminal(80, 24);
+    let mut app = App::new(registry);
+
+    // Tab into the form, then Tab again to land on the read-only Result field.
+    app.event(&key(KeyCode::Tab)).expect("tab into form");
+    app.process_queue().expect("queue");
+    app.event(&key(KeyCode::Tab)).expect("tab to output");
+    app.process_queue().expect("queue");
+
+    app.event(&ctrl(KeyCode::Char('r'))).expect("run key");
+    app.process_queue().expect("queue");
+    app.tick();
+
+    let screen = draw(&mut terminal, &mut app);
+    assert!(
+        screen.contains("lines="),
+        "the run key must fire from a read-only output:\n{screen}"
     );
 }

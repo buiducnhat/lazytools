@@ -248,7 +248,10 @@ impl DrawableComponent for ToolFormComponent {
         // on its own (`OnDemand`, or large input auto-downgraded it), or it will produce a
         // fresh result (`Generate`). Without it, an `OnDemand` tool just shows an empty
         // output with no clue that a keypress is what's missing.
-        let key = self.key_config.hint(self.key_config.keys.confirm);
+        // The run key rather than confirm: it is the one that works from *every*
+        // field. Naming `Enter` here would be a lie the moment focus sits on a
+        // multiline input, and a hint that drifts from behavior is worse than none.
+        let key = self.key_config.hint(self.key_config.keys.run);
         let badge = match self.effective_mode() {
             RunMode::OnDemand => {
                 let why = if self.is_downgraded() {
@@ -314,9 +317,7 @@ impl Component for ToolFormComponent {
                 RunMode::Live => None,
             };
             if let Some(action) = action {
-                out.push(
-                    CommandInfo::new(self.key_config.hint(keys.confirm), action, "Form").order(3),
-                );
+                out.push(CommandInfo::new(self.key_config.hint(keys.run), action, "Form").order(3));
             }
         }
         CommandBlocking::PassingOn
@@ -340,11 +341,21 @@ impl Component for ToolFormComponent {
                 return Ok(EventState::NotConsumed);
             }
 
-            // `OnDemand` (or Live that's been downgraded) runs when Enter is pressed;
-            // `Generate` re-runs to produce a fresh value.
+            // `OnDemand` (or Live that's been downgraded) runs on request; `Generate`
+            // re-runs to produce a fresh value.
+            //
+            // The run key works from any field, outputs included. The confirm key also
+            // runs the tool, but only where it isn't already spoken for: a multiline
+            // text field needs `Enter` for line breaks. Giving the focused widget first
+            // refusal is what stops the 256KB downgrade from silently turning `Enter`
+            // into "run" inside an editable multiline field — the input still being
+            // edited is exactly the one that loses its line breaks.
             let runnable = matches!(self.effective_mode(), RunMode::OnDemand | RunMode::Generate);
             let editable = self.focus < self.editable_count;
-            if runnable && editable && key_match(k, keys.confirm) {
+            let field_wants_confirm = self.widgets[self.focus].wants_confirm_key();
+            let requested = key_match(k, keys.run)
+                || (editable && !field_wants_confirm && key_match(k, keys.confirm));
+            if runnable && requested {
                 self.queue.push(InternalEvent::RunRequested);
                 return Ok(EventState::Consumed);
             }

@@ -24,6 +24,10 @@ pub struct KeysList {
     pub move_left: KeyEvent,
     pub move_right: KeyEvent,
     pub confirm: KeyEvent,
+    /// Runs the tool from any field, including read-only outputs. `confirm` still
+    /// runs it too, but only where that key isn't already spoken for — a multiline
+    /// text field needs `Enter` for line breaks.
+    pub run: KeyEvent,
     pub palette: KeyEvent,
     pub help: KeyEvent,
     pub copy: KeyEvent,
@@ -53,6 +57,11 @@ impl Default for KeysList {
             move_left: key(KeyCode::Left),
             move_right: key(KeyCode::Right),
             confirm: key(KeyCode::Enter),
+            // Ctrl for the same reason as `open_file`/`save_file` below: a text input
+            // consumes plain characters first. `Ctrl+Enter` would read better but many
+            // terminals can't tell it apart from `Enter` without the Kitty keyboard
+            // protocol, so it would silently do nothing for some users.
+            run: ctrl(KeyCode::Char('r')),
             palette: ctrl(KeyCode::Char('p')),
             help: key(KeyCode::Char('?')),
             copy: key(KeyCode::Char('y')),

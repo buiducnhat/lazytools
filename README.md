@@ -166,6 +166,7 @@ actual behavior.
 | `Ctrl+P` | Tool-finder palette (fuzzy match on name, keywords, description) |
 | `y` | Copy the currently focused output |
 | `Ctrl+O` / `Ctrl+S` | Open a file into the input / save output to a file (`Ctrl+O` is hidden for tools that take no input) |
+| `Ctrl+R` | Run / regenerate, from any field. `Enter` does the same, except in a multiline field where it inserts a line break |
 | `?` | Help |
 | `q` | Quit |
 
@@ -245,10 +246,13 @@ keep the property from drifting.
 rather than discovered as UI jank later:
 
 - `Live` re-runs on every edit, debounced. The default.
-- `OnDemand` waits for the confirm key — for slow tools, like bcrypt at cost 12
+- `OnDemand` waits for the run key — for slow tools, like bcrypt at cost 12
   (~250ms).
-- `Generate` runs on open *and* re-runs on the confirm key, so a random
+- `Generate` runs on open *and* re-runs on the run key, so a random
   generator can hand you a different password without editing anything.
+
+`Ctrl+R` always runs the tool. `Enter` runs it too, except in a multiline text
+field, where it belongs to the field and inserts a line break.
 
 Tools are pure functions with two deliberate exceptions: random generators, and
 the tools that read the clock (`timestamp`, `cron`). Both are tested by

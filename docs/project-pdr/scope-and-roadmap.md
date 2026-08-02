@@ -175,6 +175,54 @@ Two decisions worth recording:
   `collect_inputs`. End-to-end coverage rides on `convert.base64`'s `url_safe`,
   the catalog's only real toggle.
 
+### Delivered in `v0.2.2` — `Enter` belongs to the field that needs it
+
+This item was on the deferred list as an *ambiguity*: "no shipped tool triggers
+the conflict, since no `OnDemand`/`Generate` tool has a multiline field." That
+reasoning was wrong, and this file asserted it twice — the second time, during
+the `v0.2.1` release, in a strengthened form. It is a **reachable bug**, and the
+mistake is worth recording because of the shape of it.
+
+The claim was true of a tool's *declared* mode. But `effective_mode()` downgrades
+`Live` → `OnDemand` above 256KB, and `event()` derives `runnable` from the
+effective mode — so the downgrade also flipped `Enter` from "insert newline" to
+"run tool", inside the multiline field the user was still editing. Reachable in
+the **twelve** `Live` tools with a multiline input, by exactly the workflow the
+open-file popup exists for: `MAX_FILE_BYTES` is 10MB, forty times the threshold.
+
+The existing test made it worse. `large_input_downgrades_to_on_demand` pressed
+`Enter` on that field and asserted the tool ran, commented *"Only pressing Enter
+runs it"* — so the suite appeared to bless the behavior. In fact the test never
+verified its own claim: `set_tool` queues a run on open while the input is still
+empty, and the test pasted before any `tick()`, so the stale deadline fired and
+the digest was already on screen before `Enter` was pressed. It passed both
+before and after the fix, for reasons unrelated to `Enter`.
+
+The fix gives the focused widget first refusal:
+
+- `FieldWidget::wants_confirm_key()` — defaulted `false`, overridden only by
+  `TextWidget` as `multiline && !readonly`. The `!readonly` half matters:
+  `web.json-diff` and `web.jwt-decode` have multiline *outputs*, whose `event()`
+  returns early, so a read-only claim would leave `Enter` inert.
+- A new `keys.run` (`Ctrl+R`, overridable) runs the tool from any field,
+  outputs included — something `Enter` never could, since it required an
+  editable field.
+- `Enter` still runs the tool wherever it isn't spoken for, so `crypto.bcrypt`
+  and the generators behave exactly as before.
+
+This also lifts the ban it was blamed for: an `OnDemand` or `Generate` tool may
+now declare a multiline field.
+
+Two verification notes:
+
+- **Zero snapshot churn**, against an expectation of ~6. That figure applies to
+  adding a *tool* (the sidebar shifts in every layout snapshot); this added
+  none, and the run hint is gated on `runnable`, which is off for the `Live`
+  tools every snapshot renders.
+- The rewritten `large_input_downgrades_to_on_demand` was checked against the
+  unfixed code and **fails** there, so it is a real regression test rather than
+  one that merely passes.
+
 ## Explicitly out of scope
 
 Still deferred:
@@ -186,12 +234,7 @@ Still deferred:
 - **`exp` / `nbf` validation in `web.jwt-decode`** — deliberately omitted so the
   tool stays a pure function of its input; decoding and expiry-checking are
   different jobs.
-- **`Enter` in a multiline field vs. `Enter` as the run key** — no shipped tool
-  triggers the conflict (no `OnDemand`/`Generate` tool has a multiline field),
-  but the ambiguity is real and unresolved. It is a genuine constraint on the
-  catalog, not just a UX wrinkle: until it is settled, no `OnDemand` or
-  `Generate` tool can have a multiline field at all. Next up in the `v0.2.x`
-  line.
+- **OSC52 clipboard fallback for SSH sessions** — next up in the `v0.2.x` line.
 - Image conversion, document conversion, any tool requiring network access,
   a plugin runtime, or a theme editor.
 - OSC52 clipboard fallback for SSH sessions.

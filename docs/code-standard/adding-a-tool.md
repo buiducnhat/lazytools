@@ -88,10 +88,16 @@ are not stylistic:
 - **Use `RunMode::Generate`.** It runs the tool on open *and* makes the confirm
   key produce a fresh value. `Live` gives the user no way to ask for a different
   result; `OnDemand` opens showing nothing.
-- **Declare at least one option.** `ToolFormComponent::event` only fires a run
-  request while focus is on an *editable* field, so a tool with no inputs and no
-  options can never be re-triggered — it would generate exactly once and be
-  stuck there.
+- **Declare at least one option.** `Enter` only fires a run request while focus
+  is on an *editable* field, so a tool with no inputs and no options could never
+  be re-triggered through it — it would generate exactly once and be stuck
+  there. (`keys.run` / `Ctrl+R` works from any field including outputs, so this
+  is no longer a hard lock, but the convention stands: a form that is one
+  read-only box is a poor tool.)
+- **A multiline field is allowed on any `RunMode`.** It used to be impossible on
+  `OnDemand`/`Generate` — the form swallowed `Enter` as "run" before the field
+  saw it. The form now asks `FieldWidget::wants_confirm_key()` first, so a
+  multiline field keeps `Enter` for line breaks and `Ctrl+R` runs the tool.
 - **A `Toggle` may default to `true`.** Every toggle option gets a generated
   `--no-x` twin (`cli::build_subcommand`), and `cli::toggle_value` resolves the
   pair against the declared default, so `--symbols` / `--no-symbols` both work

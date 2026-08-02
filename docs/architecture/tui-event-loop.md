@@ -74,21 +74,48 @@ needed. Input larger than 256KB downgrades a `Live` tool to run-on-demand so
 pasting a large file can't hang the UI.
 
 An `OnDemand` tool never runs by itself — not on a keystroke, and not when the
-tool is opened or a file is loaded into it. Only the confirm key runs it. That
-matters on open: auto-running `bcrypt` there would block the UI thread for
-~200ms hashing an empty password before the user had typed anything. Whenever a
-tool is effectively on-demand (natively, or downgraded by large input), a badge
-under the fields prompts pressing Enter, so an empty output never looks broken.
+tool is opened or a file is loaded into it. That matters on open: auto-running
+`bcrypt` there would block the UI thread for ~200ms hashing an empty password
+before the user had typed anything. Whenever a tool is effectively on-demand
+(natively, or downgraded by large input), a badge under the fields names the run
+key, so an empty output never looks broken.
+
+## Two keys can run a tool, and why
+
+`keys.run` (`Ctrl+R`) runs the tool from **any** field, read-only outputs
+included. `keys.confirm` (`Enter`) also runs it, but only where that key isn't
+already claimed by the focused widget — `ToolFormComponent::event` asks
+`FieldWidget::wants_confirm_key()` before treating `Enter` as a run request, and
+an editable multiline text field answers `true` because it needs `Enter` for
+line breaks.
+
+That indirection exists to fix a real collision, not as a generality. Because
+`runnable` is derived from the *effective* mode, the 256KB downgrade used to
+repurpose `Enter` from "newline" to "run" — inside the very multiline field the
+user was still editing. It was reachable in every `Live` tool with a multiline
+input (twelve of them) simply by opening a large file, since the open popup
+allows up to `MAX_FILE_BYTES` (10MB), forty times the downgrade threshold.
+
+Two consequences worth knowing:
+
+- The badge and the `commands()` hint both name `keys.run`, never `confirm`.
+  `Ctrl+R` is true from every field; "Enter" would be a lie the moment focus sat
+  on a multiline input, and a hint that drifts from behavior is worse than none.
+- `wants_confirm_key()` returns `self.multiline && !self.readonly`. The
+  `!readonly` half is load-bearing: `web.json-diff` and `web.jwt-decode` declare
+  multiline *outputs*, and `TextWidget::event` bails out early when readonly — a
+  read-only field claiming the key would leave `Enter` doing nothing at all.
 
 A `Generate` tool sits between the two: it auto-runs like `Live`, but the
 confirm key *also* re-runs it, producing a new random value. Its badge reads
 "regenerate" rather than "run". Two constraints follow from how the loop works
 and are easy to trip over when adding a generator:
 
-- `ToolFormComponent::event` only fires a run request while focus is on an
-  **editable** field, so a tool with no inputs *and* no options can never be
-  re-triggered — it would generate once and be stuck. Every generator therefore
-  declares at least one option.
+- `Enter` only fires a run request while focus is on an **editable** field, so a
+  tool with no inputs *and* no options could never be re-triggered through it —
+  it would generate once and be stuck. Every generator therefore declares at
+  least one option. (`keys.run` has no such restriction, but the convention
+  stands: it also keeps the form from being a single read-only box.)
 - The 256KB downgrade never applies to `Generate`, because such a tool has only
   small options and can't reach the threshold. `is_downgraded()` deliberately
   still tests `mode == Live` only.

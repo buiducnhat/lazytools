@@ -170,6 +170,7 @@ Nhãn phím trong TUI hiển thị bằng tiếng Anh; bảng dưới đây dị
 | `Ctrl+P` | `palette` | Palette tìm tool (khớp mờ trên tên, từ khóa, mô tả) |
 | `y` | `copy` | Copy output đang chọn |
 | `Ctrl+O` / `Ctrl+S` | `open file` / `save file` | Mở file vào input / lưu output ra file (`Ctrl+O` bị ẩn với tool không có input) |
+| `Ctrl+R` | `run` | Chạy / sinh lại, từ bất kỳ trường nào. `Enter` cũng vậy, trừ trong trường nhiều dòng — ở đó nó xuống dòng |
 | `?` | `help` | Trợ giúp |
 | `q` | `quit` | Thoát |
 
@@ -252,10 +253,13 @@ duyệt toàn bộ registry để giữ tính chất này khỏi trôi.
 thay vì thành một sự cố giật UI phát hiện sau:
 
 - `Live` chạy lại sau mỗi lần sửa, có debounce. Đây là mặc định.
-- `OnDemand` đợi phím xác nhận — dành cho tool chạy chậm, như bcrypt cost 12
+- `OnDemand` đợi phím chạy — dành cho tool chạy chậm, như bcrypt cost 12
   (~250ms).
-- `Generate` chạy khi mở **và** chạy lại khi bấm phím xác nhận, để một tool sinh
+- `Generate` chạy khi mở **và** chạy lại khi bấm phím chạy, để một tool sinh
   ngẫu nhiên có thể đưa bạn mật khẩu khác mà không cần sửa gì.
+
+`Ctrl+R` luôn chạy tool. `Enter` cũng chạy, trừ khi đang ở một trường text nhiều
+dòng — ở đó phím này thuộc về trường và dùng để xuống dòng.
 
 Các tool là hàm thuần với đúng hai ngoại lệ có chủ đích: nhóm sinh ngẫu nhiên, và
 nhóm đọc đồng hồ (`timestamp`, `cron`). Cả hai được kiểm thử theo **thuộc tính** —

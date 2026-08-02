@@ -158,4 +158,12 @@ impl FieldWidget for TextWidget {
     fn is_readonly(&self) -> bool {
         self.readonly
     }
+
+    /// `!readonly` is load-bearing, not defensive. `web.json-diff` and
+    /// `web.jwt-decode` declare multiline *outputs*, and `event()` above bails out
+    /// early when readonly — so a read-only field claiming confirm would leave the
+    /// key doing nothing at all, in either place.
+    fn wants_confirm_key(&self) -> bool {
+        self.multiline && !self.readonly
+    }
 }

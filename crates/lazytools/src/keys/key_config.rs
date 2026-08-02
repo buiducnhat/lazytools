@@ -189,6 +189,7 @@ impl KeyConfig {
             "move_left" => k.move_left = ev,
             "move_right" => k.move_right = ev,
             "confirm" => k.confirm = ev,
+            "run" => k.run = ev,
             "palette" => k.palette = ev,
             "help" => k.help = ev,
             "copy" => k.copy = ev,
@@ -309,6 +310,25 @@ mod tests {
         let (config, issue) = KeyConfig::load_from(&path);
         assert!(matches!(issue, Some(KeyConfigIssue::Malformed { .. })));
         assert_eq!(config.keys.quit, KeysList::default().quit);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A binding missing from `set_binding` fails *silently* — the field exists on
+    /// `KeysList`, so the app works, but overriding it reports "no such key binding".
+    /// `run` is new, so it gets an explicit guard against exactly that.
+    #[test]
+    fn the_run_key_is_overridable() {
+        let dir = std::env::temp_dir().join("lazytools-test-run-key");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("keys.toml");
+        std::fs::write(&path, "run = \"f5\"\n").unwrap();
+
+        let (config, issue) = KeyConfig::load_from(&path);
+        assert!(
+            issue.is_none(),
+            "`run` must be a recognized binding name: {issue:?}"
+        );
+        assert_eq!(config.keys.run, ev(KeyCode::F(5), KeyModifiers::NONE));
         std::fs::remove_dir_all(&dir).ok();
     }
 

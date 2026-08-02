@@ -30,6 +30,14 @@ pub trait FieldWidget {
     fn desired_height(&self) -> u16;
     /// Output is read-only: it can receive focus (for copying in P3) but can't be edited.
     fn is_readonly(&self) -> bool;
+
+    /// Whether this widget needs the confirm key for itself, so the form must not
+    /// swallow it as "run the tool". Only a multiline text field does — it needs
+    /// `Enter` for line breaks. Defaulted to `false` because that is correct for
+    /// every other widget: none of them does anything with confirm.
+    fn wants_confirm_key(&self) -> bool {
+        false
+    }
 }
 
 /// Builds a widget from a spec `Field`. This is the **only place** that maps
