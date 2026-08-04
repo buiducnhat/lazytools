@@ -35,3 +35,4 @@ chrono.workspace = true
 cron.workspace = true
 url.workspace = true
 similar.workspace = true
+regex.workspace = true

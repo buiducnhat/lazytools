@@ -61,6 +61,177 @@ fn layout_tiny_50_cols() {
     insta::assert_snapshot!(render(50, 16));
 }
 
+/// The catalog is now taller than an ordinary terminal, so the sidebar scrolls — and it
+/// has to *remember* how far. Ratatui only nudges the offset far enough to bring the
+/// selection into view, so a `ListState` rebuilt at offset 0 on every frame re-derives
+/// the offset from scratch and pins the selection to the bottom row for the whole lower
+/// half of the list. The observable difference is here: after stepping back up, the tool
+/// that was at the bottom must still be on screen.
+#[test]
+fn sidebar_remembers_its_scroll_offset() {
+    let registry = Registry::new();
+    let last_tool = Category::ALL
+        .iter()
+        .flat_map(|&c| registry.by_category(c))
+        .last()
+        .expect("the registry is never empty")
+        .spec()
+        .name;
+
+    let mut terminal = terminal(100, 16);
+    let mut app = App::new(Registry::new());
+
+    // Far past the end, so this doesn't need updating when the catalog grows.
+    for _ in 0..200 {
+        app.event(&key(KeyCode::Char('j'))).expect("move down");
+    }
+    app.process_queue().expect("queue");
+    let bottom = draw(&mut terminal, &mut app);
+    assert!(
+        bottom.contains(last_tool),
+        "the last tool must be visible once selected:\n{bottom}"
+    );
+
+    for _ in 0..4 {
+        app.event(&key(KeyCode::Char('k'))).expect("move up");
+    }
+    app.process_queue().expect("queue");
+    let after = draw(&mut terminal, &mut app);
+    assert!(
+        after.contains(last_tool),
+        "moving up a few rows must not scroll the bottom of the list away:\n{after}"
+    );
+}
+
+/// `web.ip` declares eleven outputs — more than fit in any ordinary terminal. Reaching
+/// the last one has to scroll the form. Before it did, the layout simply stopped drawing
+/// at the bottom of the pane, so every field past the fold was unreachable no matter how
+/// correct the tool's `run()` was — the UI dictating how many fields a tool may declare.
+#[test]
+fn a_tall_form_scrolls_to_reach_its_last_field() {
+    let mut terminal = terminal(100, 30);
+    let mut app = App::new(Registry::new());
+
+    // The palette is the only public path to one specific tool.
+    app.event(&ctrl(KeyCode::Char('p'))).expect("palette");
+    app.process_queue().expect("queue");
+    for c in "subnet".chars() {
+        app.event(&key(KeyCode::Char(c))).expect("type query");
+    }
+    app.event(&key(KeyCode::Enter)).expect("open tool");
+    app.process_queue().expect("queue");
+
+    let opened = draw(&mut terminal, &mut app);
+    assert!(
+        opened.contains("Address / CIDR"),
+        "the palette must have opened `web.ip`:\n{opened}"
+    );
+    assert!(
+        !opened.contains("Scope"),
+        "the last output starts out below the fold — otherwise this proves nothing:\n{opened}"
+    );
+
+    let mut screen = String::new();
+    for _ in 0..24 {
+        app.event(&key(KeyCode::Tab)).expect("next field");
+        app.process_queue().expect("queue");
+        screen = draw(&mut terminal, &mut app);
+        if screen.contains("Scope") {
+            return;
+        }
+    }
+    panic!("tabbing through the form never brought the last field into view:\n{screen}");
+}
+
+/// `Esc` returns to the tool list from wherever focus happens to be. `Tab` alone would
+/// mean walking every remaining field first — twelve of them in `web.ip` — which is the
+/// whole reason this binding exists.
+#[test]
+fn esc_jumps_back_to_the_sidebar_from_any_field() {
+    let mut terminal = terminal(100, 30);
+    let mut app = App::new(Registry::new());
+
+    app.event(&ctrl(KeyCode::Char('p'))).expect("palette");
+    app.process_queue().expect("queue");
+    for c in "subnet".chars() {
+        app.event(&key(KeyCode::Char(c))).expect("type query");
+    }
+    app.event(&key(KeyCode::Enter)).expect("open tool");
+    app.process_queue().expect("queue");
+
+    // Deep into the form, well past the fold.
+    for _ in 0..9 {
+        app.event(&key(KeyCode::Tab)).expect("next field");
+        app.process_queue().expect("queue");
+    }
+    let deep = draw(&mut terminal, &mut app);
+    assert!(
+        deep.contains("[Esc] tools"),
+        "the command bar must advertise the way back:\n{deep}"
+    );
+
+    app.event(&key(KeyCode::Esc)).expect("escape");
+    app.process_queue().expect("queue");
+    let back = draw(&mut terminal, &mut app);
+
+    // The sidebar advertising "switch pane" is what only happens while it holds focus.
+    assert!(
+        back.contains("switch pane") && back.contains("select tool"),
+        "one keypress must land focus back on the sidebar:\n{back}"
+    );
+    // ...and it must not be advertising a way back to a list it is already on.
+    assert!(!back.contains("[Esc] tools"), "{back}");
+}
+
+/// `Esc` belongs to whatever is open on top of the form. Taking it as "back to the
+/// sidebar" while the palette is up would make the palette impossible to dismiss.
+#[test]
+fn esc_still_closes_the_palette_before_it_moves_focus() {
+    let mut terminal = terminal(100, 30);
+    let mut app = App::new(Registry::new());
+
+    app.event(&key(KeyCode::Tab)).expect("focus the form");
+    app.process_queue().expect("queue");
+    app.event(&ctrl(KeyCode::Char('p'))).expect("palette");
+    app.process_queue().expect("queue");
+    assert!(draw(&mut terminal, &mut app).contains("Find tool"));
+
+    app.event(&key(KeyCode::Esc)).expect("escape");
+    app.process_queue().expect("queue");
+    let after = draw(&mut terminal, &mut app);
+
+    assert!(!after.contains("Find tool"), "palette must close:\n{after}");
+    // Focus stayed in the form — the palette consumed the key, so `App` never saw it.
+    assert!(
+        after.contains("next field"),
+        "closing the palette must not also jump to the sidebar:\n{after}"
+    );
+}
+
+/// Quitting takes `Ctrl+Q`, not a bare `q`. A text field consumes plain characters
+/// before the app ever sees them, but a `Select`, `Toggle`, `Number`, or a read-only
+/// output does not — so a bare `q` used to end the program from inside the form, on a
+/// key that types a letter one field away.
+#[test]
+fn a_bare_q_inside_the_form_does_not_quit() {
+    let mut app = App::new(Registry::new());
+
+    // Tab twice: sidebar -> the multiline Input -> the Algorithm select, which is the
+    // kind of field that doesn't consume plain characters.
+    for _ in 0..2 {
+        app.event(&key(KeyCode::Tab)).expect("next field");
+        app.process_queue().expect("queue");
+    }
+
+    app.event(&key(KeyCode::Char('q'))).expect("q");
+    app.process_queue().expect("queue");
+    assert!(!app.should_quit(), "a bare `q` must not quit from a field");
+
+    app.event(&ctrl(KeyCode::Char('q'))).expect("ctrl+q");
+    app.process_queue().expect("queue");
+    assert!(app.should_quit(), "Ctrl+Q must quit");
+}
+
 /// End-to-end in the TUI: type input -> debounce -> `registry.run()` -> digest appears.
 /// The value must **match exactly** the CLI result for the same input.
 #[test]
@@ -450,7 +621,9 @@ fn open_file_does_not_clobber_options_of_an_input_less_tool() {
     );
 }
 
-/// The command bar must not advertise a key that does nothing.
+/// A key that does nothing for the current tool is hidden **everywhere**, help popup
+/// included — unlike the keys that are merely out of reach from the current pane,
+/// which help does list. `open file` on a tool with no input is the former.
 #[test]
 fn open_file_is_not_advertised_for_an_input_less_tool() {
     static RUNS: AtomicUsize = AtomicUsize::new(0);

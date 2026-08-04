@@ -198,7 +198,7 @@ impl App {
     fn refresh_commands(&mut self) {
         let mut cmds = Vec::new();
         command_pump(&mut cmds, false, &self.components());
-        cmds.extend(self.app_commands());
+        cmds.extend(self.app_commands(false));
         self.cmdbar.set_cmds(cmds);
     }
 
@@ -206,34 +206,49 @@ impl App {
     fn all_commands(&self) -> Vec<CommandInfo> {
         let mut cmds = Vec::new();
         command_pump(&mut cmds, true, &self.components());
-        cmds.extend(self.app_commands());
+        cmds.extend(self.app_commands(true));
         cmds
     }
 
     /// App-level commands — always takes the key string from `KeyConfig`.
-    fn app_commands(&self) -> Vec<CommandInfo> {
+    ///
+    /// `force_all` mirrors `Component::commands`: the one-line command bar shows only
+    /// what the current focus can actually do, while the help popup lists everything.
+    /// A key that is missing from the help screen is a key nobody finds.
+    fn app_commands(&self, force_all: bool) -> Vec<CommandInfo> {
         let keys = &self.key_config.keys;
+        let in_form = force_all || self.focus == Focus::Workspace;
         let mut cmds = Vec::new();
         // In the form, `Tab` is already advertised as "next field" — don't show a duplicate key.
-        if self.focus == Focus::Sidebar {
+        if force_all || self.focus == Focus::Sidebar {
             cmds.push(
                 CommandInfo::new(self.key_config.hint(keys.focus_next), "switch pane", "App")
                     .order(50),
             );
         }
+        // Only from the form: on the sidebar it would already be where it takes you.
+        if in_form {
+            cmds.push(
+                CommandInfo::new(self.key_config.hint(keys.focus_sidebar), "tools", "App")
+                    .order(51),
+            );
+        }
         cmds.push(CommandInfo::new(self.key_config.hint(keys.palette), "palette", "App").order(55));
-        if self.focus == Focus::Workspace {
+        if in_form {
             cmds.push(CommandInfo::new(self.key_config.hint(keys.copy), "copy", "App").order(58));
         }
-        // Only advertised when it would actually do something — a hint for a key that
-        // does nothing is worse than no hint at all.
+        // Deliberately *not* under `force_all`, unlike the focus checks around it. The
+        // difference is real: `copy` and `tools` work fine, you just have to be in the
+        // right pane — help should name them. `open file` does nothing at all for a tool
+        // with no input, and a help screen listing a key that only ever answers "this
+        // tool has no input" is worse than one that omits it.
         if self.tool_form.accepts_file_input() {
             cmds.push(
                 CommandInfo::new(self.key_config.hint(keys.open_file), "open file", "App")
                     .order(56),
             );
         }
-        if self.focus == Focus::Workspace {
+        if in_form {
             cmds.push(
                 CommandInfo::new(self.key_config.hint(keys.save_file), "save file", "App")
                     .order(57),
@@ -289,16 +304,22 @@ impl App {
                 self.queue.push(InternalEvent::Quit);
             } else if key_match(k, keys.focus_next) || key_match(k, keys.focus_prev) {
                 self.toggle_focus();
+            } else if key_match(k, keys.focus_sidebar) {
+                self.set_focus(Focus::Sidebar);
             }
         }
         Ok(())
     }
 
     fn toggle_focus(&mut self) {
-        self.focus = match self.focus {
+        self.set_focus(match self.focus {
             Focus::Sidebar => Focus::Workspace,
             Focus::Workspace => Focus::Sidebar,
-        };
+        });
+    }
+
+    fn set_focus(&mut self, focus: Focus) {
+        self.focus = focus;
         self.sidebar.set_focused(self.focus == Focus::Sidebar);
         self.tool_form.set_focused(self.focus == Focus::Workspace);
     }

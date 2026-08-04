@@ -1,6 +1,7 @@
 //! A generic component that reads a `ToolSpec` and builds the form. No tool name lives here —
 //! that's why adding the 9th tool costs zero lines of UI code.
 
+use std::cell::Cell;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -35,6 +36,11 @@ pub struct ToolFormComponent {
     /// what stops "open file" from writing into the first option.
     input_count: usize,
     focus: usize,
+    /// Index of the first widget drawn — the form scrolls once a tool declares more
+    /// fields than fit. Whole widgets rather than rows: a field is a bordered box, and
+    /// half a box sliced off at the top of the pane reads as a rendering bug.
+    /// `Cell` because it is derived during `draw`, which only has `&self`.
+    scroll_top: Cell<usize>,
     mode: RunMode,
     error: Option<String>,
     run_at: Option<Instant>,
@@ -52,6 +58,7 @@ impl ToolFormComponent {
             editable_count: 0,
             input_count: 0,
             focus: 0,
+            scroll_top: Cell::new(0),
             mode: RunMode::Live,
             error: None,
             run_at: None,
@@ -84,6 +91,7 @@ impl ToolFormComponent {
         self.editable_count = editable_count;
         self.input_count = spec.inputs.len();
         self.focus = 0;
+        self.scroll_top.set(0);
         self.mode = spec.mode;
         self.error = None;
         self.run_at = None;
@@ -226,24 +234,6 @@ impl DrawableComponent for ToolFormComponent {
             return Ok(());
         }
 
-        let mut y = rect.y;
-        let bottom = rect.y + rect.height;
-
-        for (i, w) in self.widgets.iter().enumerate() {
-            let height = w.desired_height();
-            if y >= bottom {
-                break;
-            }
-            let area = Rect {
-                x: rect.x,
-                y,
-                width: rect.width,
-                height: height.min(bottom - y),
-            };
-            w.draw(f, area, self.focused && i == self.focus);
-            y += area.height;
-        }
-
         // Badge shown whenever the confirm key does something — either the tool won't run
         // on its own (`OnDemand`, or large input auto-downgraded it), or it will produce a
         // fresh result (`Generate`). Without it, an `OnDemand` tool just shows an empty
@@ -264,11 +254,68 @@ impl DrawableComponent for ToolFormComponent {
             RunMode::Generate => Some(format!("press {key} to regenerate")),
             RunMode::Live => None,
         };
-        if let Some(badge) = badge
-            && y < bottom
-        {
+
+        let heights: Vec<u16> = self.widgets.iter().map(|w| w.desired_height()).collect();
+        let total: u16 = heights.iter().sum();
+
+        // The error box and the status line are reserved out of the pane *before* the
+        // fields are laid out. They report on the form as a whole, so appending them
+        // after the last field — which is what this used to do — pushed them off the
+        // bottom of any form tall enough to need them.
+        let error_rows = if self.error.is_some() { 4 } else { 0 };
+        let available = rect.height.saturating_sub(error_rows);
+        let status_rows = u16::from(badge.is_some() || total > available);
+        let view = available.saturating_sub(status_rows).max(1);
+
+        // Scroll only as far as it takes to bring the focused field fully into view, and
+        // stay there: `Tab`-ing back up must not leave the form pinned at the bottom.
+        let mut top = self.scroll_top.get().min(self.focus);
+        while top < self.focus && heights[top..=self.focus].iter().sum::<u16>() > view {
+            top += 1;
+        }
+        self.scroll_top.set(top);
+
+        let mut y = rect.y;
+        let fields_bottom = rect.y + view;
+        // Index one past the last field that got its **full** height. A field squeezed
+        // into fewer rows than it asked for is counted as not shown: its border is cut,
+        // and reporting it as visible would make the status line say the opposite of
+        // what the user is looking at.
+        let mut shown_end = top;
+
+        for (i, w) in self.widgets.iter().enumerate().skip(top) {
+            if y >= fields_bottom {
+                break;
+            }
+            let height = heights[i].min(fields_bottom - y);
+            let area = Rect {
+                x: rect.x,
+                y,
+                width: rect.width,
+                height,
+            };
+            w.draw(f, area, self.focused && i == self.focus);
+            y += height;
+            if height < heights[i] {
+                break;
+            }
+            shown_end = i + 1;
+        }
+
+        let hidden = top + (self.widgets.len() - shown_end);
+        let status = [
+            (hidden > 0).then(|| format!("↕ {hidden} more field(s)")),
+            badge,
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" · ");
+
+        let bottom = rect.y + rect.height;
+        if !status.is_empty() && status_rows > 0 && y < bottom {
             f.render_widget(
-                Paragraph::new(Line::from(badge)).style(self.theme.dim()),
+                Paragraph::new(Line::from(status)).style(self.theme.dim()),
                 Rect {
                     x: rect.x,
                     y,

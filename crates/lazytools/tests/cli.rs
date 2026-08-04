@@ -403,6 +403,179 @@ fn url_parse_decodes_query_values() {
 }
 
 #[test]
+fn color_converts_hex_to_every_format() {
+    let out = lazytools()
+        .args(["color", "#3498db", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains(r#""rgb":"rgb(52, 152, 219)""#), "{stdout}");
+    assert!(stdout.contains(r#""hsl":"hsl(204, 70%, 53%)""#), "{stdout}");
+}
+
+/// A `#` in the argument survives the shell only when quoted, so the bare form has to
+/// work too — and pasted CSS often arrives without it.
+#[test]
+fn color_accepts_a_hex_value_without_its_hash() {
+    let out = lazytools()
+        .args(["color", "00ff00"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("hex=#00ff00"), "{stdout}");
+}
+
+#[test]
+fn html_entity_round_trips_through_a_pipe() {
+    lazytools()
+        .args(["html-entity"])
+        .write_stdin(r#"<a href="x">&</a>"#)
+        .assert()
+        .success()
+        .stdout("&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;");
+
+    lazytools()
+        .args(["html-entity", "--direction", "decode"])
+        .write_stdin("&lt;b&gt;AT&T&#8212;ok&lt;/b&gt;")
+        .assert()
+        .success()
+        // The lone `&` in `AT&T` is not an entity and must survive untouched.
+        .stdout("<b>AT&T—ok</b>");
+}
+
+/// The catalog's first `true`-defaulting toggle, end to end: `--no-trim` has to reach
+/// the tool as `false` rather than being reported absent.
+#[test]
+fn lines_negated_toggle_turns_off_a_true_default() {
+    let trimmed = lazytools()
+        .args(["lines", "  padded  ", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let trimmed = String::from_utf8_lossy(&trimmed.stdout).to_string();
+    assert!(trimmed.contains(r#""result":"padded""#), "{trimmed}");
+
+    let kept = lazytools()
+        .args(["lines", "  padded  ", "--no-trim", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let kept = String::from_utf8_lossy(&kept.stdout).to_string();
+    assert!(kept.contains(r#""result":"  padded  ""#), "{kept}");
+}
+
+#[test]
+fn lines_sorts_and_deduplicates() {
+    let out = lazytools()
+        .args(["lines", "--order", "asc", "--unique", "--json"])
+        .write_stdin("c\na\nc\nb")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains(r#""result":"a\nb\nc""#), "{stdout}");
+    assert!(stdout.contains(r#""removed":"1""#), "{stdout}");
+}
+
+/// Same two-input shape as `json-diff`: `left` from the pipe, `right` positional.
+#[test]
+fn diff_takes_left_from_stdin_and_right_from_arg() {
+    let out = lazytools()
+        .args(["diff", "-", "a\nB\nc"])
+        .write_stdin("a\nb\nc")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("-b\n+B"), "{stdout}");
+    assert!(stdout.contains("summary=+1 / -1 lines"), "{stdout}");
+}
+
+#[test]
+fn regex_reports_matches_and_replacement() {
+    let out = lazytools()
+        .args([
+            "regex",
+            "2026-08-04",
+            r"(\d{4})-(\d{2})-(\d{2})",
+            "--replace",
+            "$3/$2/$1",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains(r#""count":"1""#), "{stdout}");
+    assert!(stdout.contains(r#""replaced":"04/08/2026""#), "{stdout}");
+}
+
+#[test]
+fn ip_splits_a_cidr_block() {
+    let out = lazytools()
+        .args(["ip", "192.168.1.130/24", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains(r#""network":"192.168.1.0/24""#), "{stdout}");
+    assert!(stdout.contains(r#""usable":"254""#), "{stdout}");
+    assert!(stdout.contains(r#""scope":"private""#), "{stdout}");
+}
+
+/// The secret is the primary input, so it can come from a pipe instead of `ps`-visible
+/// argv. The code itself is clock-dependent, so only its shape is asserted here — the
+/// RFC 6238 vectors are pinned in the tool's own tests.
+#[test]
+fn totp_reads_its_secret_from_stdin() {
+    let out = lazytools()
+        .args(["totp", "--digits", "8", "--json"])
+        .write_stdin("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let code = stdout
+        .split(r#""code":""#)
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .unwrap_or_else(|| panic!("no `code` in output: {stdout}"));
+    assert_eq!(code.len(), 8, "{stdout}");
+    assert!(code.chars().all(|c| c.is_ascii_digit()), "{stdout}");
+}
+
+#[test]
+fn totp_rejects_a_non_base32_secret() {
+    let out = lazytools()
+        .args(["totp", "not-base32!"])
+        .assert()
+        .code(1)
+        .get_output()
+        .clone();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("secret"),
+        "stderr must name the field: {stderr}"
+    );
+}
+
+#[test]
 fn help_lists_every_tool() {
     let out = lazytools()
         .arg("--help")
@@ -423,9 +596,16 @@ fn help_lists_every_tool() {
         "data-format",
         "number-base",
         "unicode",
+        "color",
+        "html-entity",
         "case",
         "stats",
+        "lines",
+        "diff",
+        "regex",
         "jwt-decode",
+        "totp",
+        "ip",
         "password",
         "uuid",
         "ulid",

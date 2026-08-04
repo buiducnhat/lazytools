@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use anyhow::Result;
 use lazytools_core::registry::Registry;
 use lazytools_core::spec::Category;
@@ -30,6 +32,12 @@ fn first_char(s: &str) -> String {
 pub struct Sidebar {
     rows: Vec<Row>,
     selected: usize,
+    /// The scroll offset has to **survive between frames**. Ratatui only ever nudges the
+    /// offset far enough to bring the selection into view, so a state rebuilt at offset 0
+    /// on every draw pins the selection to the bottom row the moment the catalog is
+    /// taller than the pane — and it stays pinned all the way back up. `RefCell` because
+    /// `DrawableComponent::draw` takes `&self`.
+    list_state: RefCell<ListState>,
     focused: bool,
     queue: Queue,
     theme: SharedTheme,
@@ -66,6 +74,7 @@ impl Sidebar {
         Self {
             rows,
             selected,
+            list_state: RefCell::new(ListState::default()),
             focused: true,
             queue,
             theme,
@@ -140,7 +149,7 @@ impl DrawableComponent for Sidebar {
             .block(block)
             .highlight_style(self.theme.selection());
 
-        let mut state = ListState::default();
+        let mut state = self.list_state.borrow_mut();
         state.select(Some(self.selected));
         f.render_stateful_widget(list, rect, &mut state);
         Ok(())

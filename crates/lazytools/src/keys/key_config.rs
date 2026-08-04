@@ -184,6 +184,7 @@ impl KeyConfig {
             "exit_popup" => k.exit_popup = ev,
             "focus_next" => k.focus_next = ev,
             "focus_prev" => k.focus_prev = ev,
+            "focus_sidebar" => k.focus_sidebar = ev,
             "move_down" => k.move_down = ev,
             "move_up" => k.move_up = ev,
             "move_left" => k.move_left = ev,

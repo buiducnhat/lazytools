@@ -17,6 +17,9 @@ pub struct KeysList {
     pub exit_popup: KeyEvent,
     pub focus_next: KeyEvent,
     pub focus_prev: KeyEvent,
+    /// Jumps straight back to the tool list, from any field. `focus_next` alone would
+    /// mean tabbing through every remaining field first — `web.ip` has twelve.
+    pub focus_sidebar: KeyEvent,
     pub move_down: KeyEvent,
     pub move_up: KeyEvent,
     pub move_down_alt: KeyEvent,
@@ -46,10 +49,20 @@ pub struct KeysList {
 impl Default for KeysList {
     fn default() -> Self {
         Self {
-            quit: key(KeyCode::Char('q')),
+            // Ctrl, not a bare `q`. Text fields consume plain characters before the app
+            // sees them, but a `Select`, `Toggle`, `Number`, or read-only output does
+            // not — so a bare `q` quit the program from inside the form, which is not
+            // something a keystroke that types a letter elsewhere should be able to do.
+            // `Ctrl+Q` is XON/XOFF flow control on a cooked terminal, but raw mode clears
+            // `IXON`, which is also why `save_file` can already use `Ctrl+S`.
+            quit: ctrl(KeyCode::Char('q')),
             exit_popup: key(KeyCode::Esc),
             focus_next: key(KeyCode::Tab),
             focus_prev: key(KeyCode::BackTab),
+            // `Esc` is free in the main view — every popup and the palette consume it
+            // before `App` ever sees it, and no field widget binds it. It's also the
+            // idiom users already expect for "back out to the list".
+            focus_sidebar: key(KeyCode::Esc),
             move_down: key(KeyCode::Char('j')),
             move_up: key(KeyCode::Char('k')),
             move_down_alt: key(KeyCode::Down),

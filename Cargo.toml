@@ -59,6 +59,13 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 cron = "0.17"
 url = "2.5"
 similar = "3.1"
+# default-features off drops `perf-dfa-full` and the Unicode tables `text.regex` has no
+# use for; `std` + `unicode` + `perf` is what a pattern typed into a form actually needs.
+regex = { version = "1.11", default-features = false, features = [
+  "std",
+  "perf",
+  "unicode",
+] }
 
 assert_cmd = "2"
 insta = "1.48"

@@ -13,6 +13,7 @@ pub(crate) fn register_all() -> Vec<Box<dyn Tool>> {
         Box::new(crypto::hash::HashTool::default()),
         Box::new(crypto::hmac::HmacTool::default()),
         Box::new(crypto::bcrypt::BcryptTool::default()),
+        Box::new(crypto::totp::TotpTool::default()),
         Box::new(convert::base64::Base64Tool::default()),
         Box::new(convert::url::UrlTool::default()),
         Box::new(convert::hex::HexTool::default()),
@@ -20,8 +21,13 @@ pub(crate) fn register_all() -> Vec<Box<dyn Tool>> {
         Box::new(convert::data_format::DataFormatTool::default()),
         Box::new(convert::number_base::NumberBaseTool::default()),
         Box::new(convert::unicode::UnicodeTool::default()),
+        Box::new(convert::color::ColorTool::default()),
+        Box::new(convert::html_entity::HtmlEntityTool::default()),
         Box::new(text::case::CaseTool::default()),
         Box::new(text::stats::StatsTool::default()),
+        Box::new(text::lines::LinesTool::default()),
+        Box::new(text::diff::DiffTool::default()),
+        Box::new(text::regex::RegexTool::default()),
         Box::new(web::jwt_decode::JwtDecodeTool::default()),
         Box::new(generate::password::PasswordTool::default()),
         Box::new(generate::uuid::UuidTool::default()),
@@ -32,5 +38,6 @@ pub(crate) fn register_all() -> Vec<Box<dyn Tool>> {
         Box::new(web::cron::CronTool::default()),
         Box::new(web::url_parse::UrlParseTool::default()),
         Box::new(web::json_diff::JsonDiffTool::default()),
+        Box::new(web::ip::IpTool::default()),
     ]
 }
