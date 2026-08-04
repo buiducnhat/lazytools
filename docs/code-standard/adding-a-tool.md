@@ -7,7 +7,7 @@ is optimized for: **one new file + one line**, no changes to the TUI or CLI laye
 ## Steps
 
 1. Create a new file under `crates/lazytools-core/src/tools/<category>/<name>.rs`
-   (categories today: `crypto/`, `convert/`, `text/`, `web/`; add a new
+   (categories today: `crypto/`, `convert/`, `generate/`, `text/`, `web/`; add a new
    subdirectory for a new category and a matching variant in `spec::Category`
    if needed).
 2. Define a struct holding a `ToolSpec`, built in `Default::default()`:
@@ -81,9 +81,12 @@ Done — the tool now shows up in the sidebar, the `Ctrl+P` palette, and
 
 ## Writing a generator
 
-Tools that produce a random value (the `Generate` category) have four extra
-rules. Each exists because of a constraint elsewhere in the codebase, so they
-are not stylistic:
+Tools whose result is not a pure function of their input — a random value, or
+anything read off the clock — have four extra rules. Each exists because of a
+constraint elsewhere in the codebase, so they are not stylistic. They apply by
+*behavior*, not by category: `text.lines` (whose `shuffle` order reads the RNG)
+and `crypto.totp` (which reads the clock) follow them without being in
+`Generate`.
 
 - **Use `RunMode::Generate`.** It runs the tool on open *and* makes the confirm
   key produce a fresh value. `Live` gives the user no way to ask for a different
@@ -101,9 +104,10 @@ are not stylistic:
 - **A `Toggle` may default to `true`.** Every toggle option gets a generated
   `--no-x` twin (`cli::build_subcommand`), and `cli::toggle_value` resolves the
   pair against the declared default, so `--symbols` / `--no-symbols` both work
-  regardless of which way the field points. `generate.password` still uses a
-  `charset` select rather than three toggles, but only for CLI compatibility —
-  no longer because the CLI can't express it.
+  regardless of which way the field points. `text.lines`'s `trim` is the shipped
+  example: `--no-trim` reaches the tool as `false`. `generate.password` still
+  uses a `charset` select rather than three toggles, but only for CLI
+  compatibility — no longer because the CLI can't express it.
 - **Return `Ok` for the default inputs.** `spec_invariants::declared_outputs_are_actually_produced`
   tolerates an `InvalidInput` rejection but not a `Failed` or a panic, and a
   generator has no reason to reject its own defaults.

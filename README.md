@@ -19,42 +19,41 @@ $ lazytools uuid
 $ lazytools timestamp 1700000000 --json | jq -r .relative
 2 years ago
 
+$ lazytools ip 10.0.0.0/12 --json | jq -r .usable
+1048574
+
 $ lazytools data-format --from json --to yaml config.json > config.yaml
 ```
 
 Run `lazytools` with no arguments to open the interface:
 
 ```
-┌ Tools ───────────────┐┌ Hash Text ───────────────────────────────────────────────────┐
-│Crypto                ││┌ Input ─────────────────────────────────────────────────────┐│
-│  Hash Text           │││hello world                                                 ││
-│  HMAC                │││                                                            ││
-│  Bcrypt              │││                                                            ││
-│Convert               │││                                                            ││
-│  Base64              │││                                                            ││
-│  URL Encode          │││                                                            ││
-│  Hex                 ││└────────────────────────────────────────────────────────────┘│
-│  JSON Format         ││┌ Algorithm ─────────────────────────────────────────────────┐│
-│  Data Format         │││‹ md5 ›                                                     ││
-│  Number Base         ││└────────────────────────────────────────────────────────────┘│
-│  Unicode Escape      ││┌ Digest ────────────────────────────────────────────────────┐│
-│Generate              │││5eb63bbbe01eeed093cb22bb8f5acdc3                            ││
-│  Password            ││└────────────────────────────────────────────────────────────┘│
-│  UUID                ││                                                              │
-│  ULID                ││                                                              │
-│  Random Token        ││                                                              │
-│  Lorem Ipsum         ││                                                              │
-│Text                  ││                                                              │
-│  Change Case         ││                                                              │
-│  Text Stats          ││                                                              │
-│Web                   ││                                                              │
-│  JWT Decode          ││                                                              │
-│  Timestamp           ││                                                              │
-│  Cron Explainer      ││                                                              │
-│  URL Parser          ││                                                              │
-│  JSON Diff           ││                                                              │
-└──────────────────────┘└──────────────────────────────────────────────────────────────┘
-[Tab] next field [^P] palette [^O] open file [^S] save file [y] copy [?] help [q] quit
+┌ Tools ───────────────┐┌ Hash Text ─────────────────────────────────────────────────────┐
+│Crypto                ││┌ Input ───────────────────────────────────────────────────────┐│
+│  Hash Text           │││hello world                                                   ││
+│  HMAC                │││                                                              ││
+│  Bcrypt              │││                                                              ││
+│  TOTP Code           │││                                                              ││
+│Convert               │││                                                              ││
+│  Base64              │││                                                              ││
+│  URL Encode          ││└──────────────────────────────────────────────────────────────┘│
+│  Hex                 ││┌ Algorithm ───────────────────────────────────────────────────┐│
+│  JSON Format         │││‹ md5 ›                                                       ││
+│  Data Format         ││└──────────────────────────────────────────────────────────────┘│
+│  Number Base         ││┌ Digest ──────────────────────────────────────────────────────┐│
+│  Unicode Escape      │││5eb63bbbe01eeed093cb22bb8f5acdc3                              ││
+│  Color Converter     ││└──────────────────────────────────────────────────────────────┘│
+│  HTML Entities       ││                                                                │
+│Generate              ││                                                                │
+│  Password            ││                                                                │
+│  UUID                ││                                                                │
+│  ULID                ││                                                                │
+│  Random Token        ││                                                                │
+│  Lorem Ipsum         ││                                                                │
+│Text                  ││                                                                │
+│  Change Case         ││                                                                │
+└──────────────────────┘└────────────────────────────────────────────────────────────────┘
+[Tab] next field [^P] palette [^O] open file [^S] save file [y] copy [?] help [q] quit    
 ```
 
 ## Install
@@ -97,7 +96,7 @@ Or run it in place: `cargo run -p lazytools`.
 
 ## Tool catalog
 
-22 tools across five categories — the same grouping the TUI sidebar uses.
+29 tools across five categories — the same grouping the TUI sidebar uses.
 
 **Crypto**
 
@@ -106,6 +105,7 @@ Or run it in place: `cargo run -p lazytools`.
 | `hash` | Hash text with MD5 / SHA-1 / SHA-256 / SHA-512 |
 | `hmac` | HMAC with a secret key (SHA-1 / SHA-256 / SHA-512) |
 | `bcrypt` | Hash a password, or check whether a hash matches |
+| `totp` | Generate a time-based one-time password from a base32 secret |
 
 **Convert**
 
@@ -118,6 +118,8 @@ Or run it in place: `cargo run -p lazytools`.
 | `data-format` | Convert between JSON, YAML, TOML, and CSV |
 | `number-base` | Convert a number between binary, octal, decimal, and hex |
 | `unicode` | Escape text to Unicode sequences, or decode them back |
+| `color` | Convert a color between hex, RGB, HSL, HSV, and CMYK |
+| `html-entity` | Escape text for HTML, or decode entities back to text |
 
 **Generate**
 
@@ -135,6 +137,9 @@ Or run it in place: `cargo run -p lazytools`.
 |---|---|
 | `case` | Convert text between camel, snake, kebab, and other cases |
 | `stats` | Count characters, words, lines, and bytes in text |
+| `lines` | Sort, deduplicate, trim, and number lines of text |
+| `diff` | Compare two blocks of text by line, word, or character |
+| `regex` | Test a regular expression against text and see every match |
 
 **Web**
 
@@ -145,6 +150,7 @@ Or run it in place: `cargo run -p lazytools`.
 | `cron` | Explain a cron expression and list its next runs |
 | `url-parse` | Break a URL into its parts |
 | `json-diff` | Compare two JSON documents structurally |
+| `ip` | Break a CIDR block into network, mask, range, and host count |
 
 `lazytools <command> --help` shows the full set of options — that help text is
 **generated directly from the tool's declaration**, so it never drifts from
@@ -162,19 +168,20 @@ actual behavior.
 | Key | Action |
 |---|---|
 | `Tab` | Switch pane / move to next field |
+| `Esc` | Jump straight back to the tool list, from any field |
 | `j` `k` / `↑` `↓` | Move within the sidebar |
 | `Ctrl+P` | Tool-finder palette (fuzzy match on name, keywords, description) |
 | `y` | Copy the currently focused output |
 | `Ctrl+O` / `Ctrl+S` | Open a file into the input / save output to a file (`Ctrl+O` is hidden for tools that take no input) |
 | `Ctrl+R` | Run / regenerate, from any field. `Enter` does the same, except in a multiline field where it inserts a line break |
 | `?` | Help |
-| `q` | Quit |
+| `Ctrl+Q` | Quit — `Ctrl` so a stray `q` in the form can't end the session |
 
 Remap keys via `~/.config/lazytools/keys.toml`:
 
 ```toml
 palette = "ctrl+k"
-quit = "q"
+focus_sidebar = "ctrl+t"
 help = "?"
 ```
 

@@ -29,6 +29,12 @@ The claim is **machine-checkable**, and it has been checked twice:
   **empty**. All 75 UI lines that did change belong to a separate batch that
   added no tools at all, and were spent on `RunMode::Generate` plus one bug
   fix.
+- **v0.3:** the catalog went 22 → 29. All seven tool files together changed
+  zero lines in `crates/lazytools/src/`. The ~100 UI lines this release *did*
+  spend went to two layout assumptions that broke once the content outgrew the
+  screen — the sidebar at 29 tools, the tool form at `web.ip`'s twelve fields.
+  Both were fixed at the abstraction: neither was paid for by trimming a spec,
+  and `web.ip` still declares all twelve.
 
 That separation is the useful signal: UI work is driven by genuinely new
 *interaction semantics*, not by tool count. Keep it that way — if adding a tool

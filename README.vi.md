@@ -19,42 +19,41 @@ $ lazytools uuid
 $ lazytools timestamp 1700000000 --json | jq -r .relative
 2 years ago
 
+$ lazytools ip 10.0.0.0/12 --json | jq -r .usable
+1048574
+
 $ lazytools data-format --from json --to yaml config.json > config.yaml
 ```
 
 Gõ `lazytools` không tham số để mở giao diện:
 
 ```
-┌ Tools ───────────────┐┌ Hash Text ───────────────────────────────────────────────────┐
-│Crypto                ││┌ Input ─────────────────────────────────────────────────────┐│
-│  Hash Text           │││hello world                                                 ││
-│  HMAC                │││                                                            ││
-│  Bcrypt              │││                                                            ││
-│Convert               │││                                                            ││
-│  Base64              │││                                                            ││
-│  URL Encode          │││                                                            ││
-│  Hex                 ││└────────────────────────────────────────────────────────────┘│
-│  JSON Format         ││┌ Algorithm ─────────────────────────────────────────────────┐│
-│  Data Format         │││‹ md5 ›                                                     ││
-│  Number Base         ││└────────────────────────────────────────────────────────────┘│
-│  Unicode Escape      ││┌ Digest ────────────────────────────────────────────────────┐│
-│Generate              │││5eb63bbbe01eeed093cb22bb8f5acdc3                            ││
-│  Password            ││└────────────────────────────────────────────────────────────┘│
-│  UUID                ││                                                              │
-│  ULID                ││                                                              │
-│  Random Token        ││                                                              │
-│  Lorem Ipsum         ││                                                              │
-│Text                  ││                                                              │
-│  Change Case         ││                                                              │
-│  Text Stats          ││                                                              │
-│Web                   ││                                                              │
-│  JWT Decode          ││                                                              │
-│  Timestamp           ││                                                              │
-│  Cron Explainer      ││                                                              │
-│  URL Parser          ││                                                              │
-│  JSON Diff           ││                                                              │
-└──────────────────────┘└──────────────────────────────────────────────────────────────┘
-[Tab] next field [^P] palette [^O] open file [^S] save file [y] copy [?] help [q] quit
+┌ Tools ───────────────┐┌ Hash Text ─────────────────────────────────────────────────────┐
+│Crypto                ││┌ Input ───────────────────────────────────────────────────────┐│
+│  Hash Text           │││hello world                                                   ││
+│  HMAC                │││                                                              ││
+│  Bcrypt              │││                                                              ││
+│  TOTP Code           │││                                                              ││
+│Convert               │││                                                              ││
+│  Base64              │││                                                              ││
+│  URL Encode          ││└──────────────────────────────────────────────────────────────┘│
+│  Hex                 ││┌ Algorithm ───────────────────────────────────────────────────┐│
+│  JSON Format         │││‹ md5 ›                                                       ││
+│  Data Format         ││└──────────────────────────────────────────────────────────────┘│
+│  Number Base         ││┌ Digest ──────────────────────────────────────────────────────┐│
+│  Unicode Escape      │││5eb63bbbe01eeed093cb22bb8f5acdc3                              ││
+│  Color Converter     ││└──────────────────────────────────────────────────────────────┘│
+│  HTML Entities       ││                                                                │
+│Generate              ││                                                                │
+│  Password            ││                                                                │
+│  UUID                ││                                                                │
+│  ULID                ││                                                                │
+│  Random Token        ││                                                                │
+│  Lorem Ipsum         ││                                                                │
+│Text                  ││                                                                │
+│  Change Case         ││                                                                │
+└──────────────────────┘└────────────────────────────────────────────────────────────────┘
+[Tab] next field [^P] palette [^O] open file [^S] save file [y] copy [?] help [q] quit    
 ```
 
 > Lưu ý: giao diện TUI hiện chỉ hiển thị tiếng Anh (xem phần "Phím tắt" bên dưới
@@ -100,7 +99,7 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 
 ## Danh mục tool
 
-22 tool trên năm category — đúng cách nhóm mà sidebar của TUI đang dùng.
+29 tool trên năm category — đúng cách nhóm mà sidebar của TUI đang dùng.
 
 **Crypto**
 
@@ -109,6 +108,7 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 | `hash` | Băm văn bản bằng MD5 / SHA-1 / SHA-256 / SHA-512 |
 | `hmac` | HMAC với khóa bí mật (SHA-1 / SHA-256 / SHA-512) |
 | `bcrypt` | Băm mật khẩu, hoặc kiểm tra hash có khớp không |
+| `totp` | Sinh mật khẩu dùng một lần theo thời gian từ secret base32 |
 
 **Convert**
 
@@ -121,6 +121,8 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 | `data-format` | Chuyển đổi giữa JSON, YAML, TOML và CSV |
 | `number-base` | Chuyển số giữa nhị phân, bát phân, thập phân và hex |
 | `unicode` | Escape văn bản thành chuỗi Unicode, hoặc giải mã ngược lại |
+| `color` | Chuyển màu giữa hex, RGB, HSL, HSV và CMYK |
+| `html-entity` | Escape văn bản cho HTML, hoặc giải mã entity ngược lại |
 
 **Generate**
 
@@ -138,6 +140,9 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 |---|---|
 | `case` | Chuyển văn bản giữa camel, snake, kebab và các kiểu khác |
 | `stats` | Đếm ký tự, từ, dòng và byte trong văn bản |
+| `lines` | Sắp xếp, khử trùng lặp, trim và đánh số các dòng văn bản |
+| `diff` | So sánh hai khối văn bản theo dòng, theo từ hoặc theo ký tự |
+| `regex` | Kiểm thử biểu thức chính quy trên văn bản và xem mọi kết quả khớp |
 
 **Web**
 
@@ -148,6 +153,7 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 | `cron` | Giải thích biểu thức cron và liệt kê các lần chạy kế tiếp |
 | `url-parse` | Tách URL thành các thành phần |
 | `json-diff` | So sánh hai tài liệu JSON theo cấu trúc |
+| `ip` | Tách khối CIDR thành network, mask, dải địa chỉ và số host |
 
 `lazytools <lệnh> --help` cho biết đầy đủ tùy chọn — phần trợ giúp đó **sinh
 thẳng từ khai báo của tool**, nên không bao giờ lệch với hành vi thật.
@@ -166,19 +172,20 @@ Nhãn phím trong TUI hiển thị bằng tiếng Anh; bảng dưới đây dị
 | Phím | Nhãn trong TUI | Việc |
 |---|---|---|
 | `Tab` | `next field` | Chuyển vùng / sang field kế |
+| `Esc` | `tools` | Nhảy thẳng về danh sách tool, từ bất kỳ trường nào |
 | `j` `k` / `↑` `↓` | `select` | Di chuyển trong sidebar |
 | `Ctrl+P` | `palette` | Palette tìm tool (khớp mờ trên tên, từ khóa, mô tả) |
 | `y` | `copy` | Copy output đang chọn |
 | `Ctrl+O` / `Ctrl+S` | `open file` / `save file` | Mở file vào input / lưu output ra file (`Ctrl+O` bị ẩn với tool không có input) |
 | `Ctrl+R` | `run` | Chạy / sinh lại, từ bất kỳ trường nào. `Enter` cũng vậy, trừ trong trường nhiều dòng — ở đó nó xuống dòng |
 | `?` | `help` | Trợ giúp |
-| `q` | `quit` | Thoát |
+| `Ctrl+Q` | `quit` | Thoát — dùng `Ctrl` để một phím `q` lỡ tay trong form không kết thúc phiên làm việc |
 
 Đổi phím bằng `~/.config/lazytools/keys.toml`:
 
 ```toml
 palette = "ctrl+k"
-quit = "q"
+focus_sidebar = "ctrl+t"
 help = "?"
 ```
 

@@ -68,9 +68,11 @@ why the publish order matters.
 ## Delivered in v0.2 — catalog expansion
 
 The v0.2 line fills the three categories `Category` had declared but never
-populated (`Generate`, `Text`, `Web`), in three batches of increasing cost.
+populated (`Generate`, `Text`, `Web`), in three batches of increasing cost. All
+three shipped under the single **`v0.2.0`** tag; the batch numbers below are
+planning units, not releases.
 
-**Batch 1 (`v0.1.1`) — 5 zero-dependency tools, 8 → 13.**
+**Batch 1 — 5 zero-dependency tools, 8 → 13.**
 
 - `web.jwt-decode` — decode a JWT, optionally verify its HMAC signature.
   Deliberately does **not** check `exp`/`nbf`: that needs a clock.
@@ -88,7 +90,7 @@ This batch doubled as a machine-checkable test of the central design thesis in
 `git diff` over `crates/lazytools/src/`. The cost of the 13th tool really is
 the cost of the 4th.
 
-**Batch 2 (`v0.2.0`) — the `Generate` category, 13 → 18.**
+**Batch 2 — the `Generate` category, 13 → 18.**
 
 `generate.password`, `generate.uuid`, `generate.ulid`, `generate.token`,
 `generate.lorem`. These are the first tools with **no inputs** and the first
@@ -108,7 +110,7 @@ first (see `RunMode::Generate` in
 latter only orders by millisecond, so a batch generated inside one millisecond
 comes out visibly unsorted — unacceptable for a tool that sells sortability.
 
-**Batch 3 (`v0.3.0`) — the `Web` category, 18 → 22.**
+**Batch 3 — the `Web` category, 18 → 22.**
 
 `web.timestamp`, `web.cron`, `web.url-parse`, `web.json-diff`. With these the
 roadmap's v0.2 commitment is complete: all five categories declared in
@@ -222,6 +224,99 @@ Two verification notes:
 - The rewritten `large_input_downgrades_to_on_demand` was checked against the
   unfixed code and **fails** there, so it is a real regression test rather than
   one that merely passes.
+
+## v0.3 — the second catalog expansion, 22 → 29
+
+The v0.2 line filled every category `spec::Category` had declared. This batch is
+about *depth* rather than coverage: the seven jobs a terminal utility belt gets
+asked for that the catalog still had no answer to.
+
+- `convert.color` — hex / `rgb()` / `hsl()` in, hex + RGB + HSL + HSV + CMYK out.
+- `convert.html-entity` — escape for HTML, or decode entities back.
+- `text.lines` — sort, deduplicate, trim, drop empties, number.
+- `text.diff` — the general-purpose sibling of `web.json-diff`, at line, word,
+  or character granularity.
+- `text.regex` — pattern, flags, every match with its capture groups, and a
+  substitution.
+- `web.ip` — a CIDR block broken into network, mask, range, and host counts,
+  for both address families.
+- `crypto.totp` — an RFC 6238 code from a base32 secret.
+
+One new dependency: `regex`, with default features off. Everything else reuses
+what was already in the tree — `similar` (from `web.json-diff`), `chrono` (from
+`web.timestamp`), `hmac`/`sha1`/`sha2` (from `crypto.hmac`), and `std::net`.
+
+### Decisions worth recording
+
+- **Base32 is ~20 hand-written lines, not a dependency.** `crypto.totp` needs
+  decode only, and the secret printed beside a QR code is the only base32 this
+  program will ever see. `data-encoding` would have been a whole crate for one
+  loop.
+- **`hotp()` takes a counter, not a clock.** The tool reads `Utc::now()`; the
+  function under it does not. That is what makes the RFC 6238 vectors assertable
+  — a tool whose only entry point reads "now" is one whose correctness can't be
+  tested. The secret is also the tool's *primary input*, so it arrives over a
+  pipe rather than sitting in `ps`-visible argv.
+- **`text.lines` is the first tool with a `true`-defaulting `Toggle`.** `v0.2.1`
+  built the `--no-x` machinery and could only pin it against a synthetic spec,
+  because no shipped tool used it. `--no-trim` is now the real end-to-end case.
+- **`convert.color` renders HSL at whole degrees and percents**, which is what
+  CSS is written in and is therefore lossy. The exactness test targets the
+  conversion itself at full precision; a separate test bounds the *rendered*
+  round trip at ±3 of an 8-bit channel, which is the arithmetic of the rounding
+  rather than a tolerance picked to make a test pass.
+- **`text.regex` caps the match *listing*, not the search.** `count` is always
+  the true total. A `.` against a file opened through `Ctrl+O` (`MAX_FILE_BYTES`
+  is 10MB) would otherwise render a listing far larger than the input.
+- **`convert.html-entity` passes unknown entities through verbatim.** A decoder
+  that mangled `AT&T` would corrupt exactly the text people paste in to check.
+  The scan for a terminating `;` is capped so a stray `&` can't swallow the
+  document.
+- **`web.ip` reports IPv4 host conventions and IPv6's absence of them.** The
+  network and broadcast addresses aren't assignable — except in a `/31`
+  (RFC 3021) and a `/32`, where they are. IPv6 has no broadcast address and no
+  such carve-out, and the tool says so rather than inventing one.
+
+### The interaction debt this batch surfaced
+
+Two layout assumptions held only because the catalog was small, and both broke
+the moment it wasn't. Each was fixed at the abstraction rather than by trimming
+a tool's spec, and each carries a test verified to **fail** against the unfixed
+code:
+
+- **The sidebar rebuilt its `ListState` every frame.** At 29 tools the list is
+  taller than a 30-row terminal for the first time. Ratatui only nudges the
+  offset far enough to reveal the selection, so re-deriving it from zero each
+  frame pinned the selection to the bottom row for the whole lower half of the
+  catalog. The state now lives on the component.
+- **The tool form did not scroll at all.** It drew top-down and stopped at the
+  bottom of the pane, so `web.ip`'s twelve fields put everything past the fold
+  out of reach — the UI dictating how many fields a tool may declare, which
+  [product-goals.md](product-goals.md) names as the smell to fix at the
+  abstraction. The form now scrolls by whole widgets, reserves the error box and
+  status line up front, and reports how many fields are off screen.
+
+Snapshot churn: the six layout snapshots shifted for the sidebar (expected when
+adding tools), and `layout_tiny_50_cols` — a deliberately degenerate 50×16 — now
+shows `↕ 1 more field(s)` where it used to show a `Digest` box with two border
+rows and no content. That is the honest rendering of the same situation.
+
+### Two bindings changed, both for the same reason
+
+Neither is a new capability; both are keys that were doing the wrong thing once a
+form got big enough to notice.
+
+- **`Esc` jumps to the tool list** (`focus_sidebar`). `Tab` walks fields and only
+  reaches the sidebar after the last one — twelve presses in `web.ip`.
+- **Quit moved from `q` to `Ctrl+Q`.** Routing gives the focused widget the key
+  first, so a text field swallowed a bare `q` as a character — but a `Select`,
+  `Toggle`, `Number`, or read-only output does not, and `q` fell straight
+  through to "quit". The same keystroke typed a letter one field away and ended
+  the session here. `Ctrl+Q` is XON/XOFF on a cooked terminal; raw mode clears
+  `IXON`, which is the same reason `save_file` can already be `Ctrl+S`.
+
+Both are `KeyConfig` entries, so `quit = "q"` in `keys.toml` restores the old
+behavior for anyone who wants it.
 
 ## Explicitly out of scope
 

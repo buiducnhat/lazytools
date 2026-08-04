@@ -3,7 +3,7 @@
 **lazytools** — an offline, keyboard-first terminal utility belt: a TUI plus a
 set of CLI subcommands sharing one spec-driven tool registry, built in Rust
 (edition 2024) with `ratatui` + `clap` on top of a UI-framework-free core crate.
-The catalog holds **22 tools** across five categories (Crypto, Convert,
+The catalog holds **29 tools** across five categories (Crypto, Convert,
 Generate, Text, Web), each declared in a single file and registered with a
 single line.
 

@@ -18,13 +18,14 @@ crates/
       value.rs              # Inputs/Outputs/Value — the data tools exchange
       tools/                # one subdirectory per Category, one file per tool
         mod.rs              # register_all() — the ONLY place every tool is listed
-        crypto/             # hash.rs, hmac.rs, bcrypt.rs
+        crypto/             # hash.rs, hmac.rs, bcrypt.rs, totp.rs
         convert/            # base64.rs, url.rs, hex.rs, json_fmt.rs,
-                            #   data_format.rs, number_base.rs, unicode.rs
+                            #   data_format.rs, number_base.rs, unicode.rs,
+                            #   color.rs, html_entity.rs
         generate/           # password.rs, uuid.rs, ulid.rs, token.rs, lorem.rs
-        text/               # case.rs, stats.rs
+        text/               # case.rs, stats.rs, lines.rs, diff.rs, regex.rs
         web/                # jwt_decode.rs, timestamp.rs, cron.rs,
-                            #   url_parse.rs, json_diff.rs
+                            #   url_parse.rs, json_diff.rs, ip.rs
     tests/
       spec_invariants.rs    # registry-wide invariants (see code-standard/testing-conventions.md)
 

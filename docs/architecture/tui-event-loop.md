@@ -42,7 +42,8 @@ it, so it falls through to the copy shortcut.
 
 If no component consumes the event, `App::event` checks its own app-level
 shortcuts (`palette`, `help`, `copy`, `open_file`, `save_file`, `quit`,
-`focus_next`/`focus_prev`) via `key_match` against the active `KeyConfig`.
+`focus_next`/`focus_prev`, `focus_sidebar`) via `key_match` against the active
+`KeyConfig`.
 
 ## Focus and layout
 
@@ -52,6 +53,53 @@ width is responsive (`App::sidebar_width`):
 - `< 60` cols: sidebar hidden entirely, workspace takes the full width
 - `60..80` cols: sidebar shrinks to an icon-only rail
 - `>= 80` cols: full sidebar with tool names
+
+### Both panes scroll, and both remember how far
+
+Vertically, neither pane assumes its content fits. The catalog outgrew an
+ordinary terminal at 29 tools, and `web.ip` alone declares twelve fields.
+
+- **Sidebar.** `ListState` is stored on the component (behind a `RefCell`,
+  since `DrawableComponent::draw` only has `&self`) rather than rebuilt each
+  frame. Ratatui nudges the offset just far enough to bring the selection into
+  view, so a state that starts at offset 0 every frame re-derives the scroll
+  from scratch and pins the selection to the bottom row for the whole lower
+  half of the list.
+- **Tool form.** `ToolFormComponent` scrolls by **whole widgets**, not rows: a
+  field is a bordered box, and half a box sliced off at the top of the pane
+  reads as a rendering bug. The error box and the status line are reserved out
+  of the pane *before* the fields are laid out, since appending them after the
+  last field pushed them off the bottom of exactly the tall forms that need
+  them. When fields don't all fit, the status line says how many are off
+  screen — counting any field squeezed below its `desired_height()`, because a
+  field whose border is cut is not one the user can read.
+
+This is the same rule as everywhere else in the layer: the UI must not decide
+how many fields a tool is allowed to declare.
+
+### Focus, and getting back out of a tall form
+
+`Tab` walks fields and then hands control back to `App`, which flips the pane.
+That is fine at three fields and tedious at twelve, so `focus_sidebar` (`Esc`)
+jumps straight to the tool list from wherever focus is. It is a *set*, not a
+toggle: pressing it on the sidebar leaves you there rather than bouncing into
+the form.
+
+`Esc` can be spent this way because every popup and the palette sit ahead of the
+panes in the routing order and consume it first, and no field widget binds it —
+so `App` only ever sees it when nothing is layered on top.
+
+The command bar and the help popup deliberately disagree about what to show, and
+`app_commands(force_all)` is where that is decided — the same `force_all`
+convention `Component::commands` already uses:
+
+- **Out of reach from this pane** (`copy`, `save file`, `tools`, `switch pane`) —
+  the key works, you are just standing in the wrong place. The one-line bar hides
+  it; the help popup lists it, because a key missing from the help screen is a
+  key nobody finds.
+- **Does nothing for this tool** (`open file` on a tool with no input) — hidden
+  in both. A help entry whose only outcome is the error "this tool has no input"
+  is worse than no entry.
 
 ## Internal event queue
 
