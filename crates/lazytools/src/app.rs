@@ -14,11 +14,12 @@ use crate::components::sidebar::Sidebar;
 use crate::components::tool_form::ToolFormComponent;
 use crate::components::{CommandInfo, Component, DrawableComponent, command_pump, event_pump};
 use crate::keys::{KeyConfig, key_match};
-use crate::popups::{FileOpenPopup, FileSavePopup, HelpPopup, MsgPopup};
+use crate::popups::{FileOpenPopup, FileSavePopup, HelpPopup, MsgPopup, ThemePopup};
 use crate::queue::{InternalEvent, NeedsUpdate, Queue};
 use crate::session::{self, Session};
 use crate::settings::Settings;
-use crate::ui::SharedTheme;
+use crate::theme_state::{self, ThemeState};
+use crate::ui::{SharedTheme, ThemeHandle, themes};
 
 /// Responsive breakpoints: below 80 cols the sidebar shrinks to icons; below 60 it's hidden entirely.
 const SIDEBAR_WIDTH: u16 = 24;
@@ -46,6 +47,14 @@ pub struct App {
     help_popup: HelpPopup,
     file_open: FileOpenPopup,
     file_save: FileSavePopup,
+    theme_popup: ThemePopup,
+    /// Id of the preset in use. The colors themselves live in `theme`; this is
+    /// what gets written down, and what the picker opens its cursor on.
+    theme_id: String,
+    /// Whether the picker was used in this run. Without it, quitting would
+    /// write a `theme.toml` for someone who never asked for one — and that
+    /// file would then start shadowing later edits to `config.toml`.
+    theme_picked: bool,
     focus: Focus,
     should_quit: bool,
     needs_redraw: bool,
@@ -62,6 +71,7 @@ impl App {
             KeyConfig::default(),
             Settings::default(),
             Session::default(),
+            themes::DEFAULT_ID.to_string(),
             Vec::new(),
         )
     }
@@ -71,7 +81,14 @@ impl App {
     /// the issue so the user can go fix it.
     pub fn from_user_config(registry: Registry) -> Self {
         let (key_config, key_issue) = KeyConfig::load();
-        let (settings, settings_issue) = Settings::load();
+        let (mut settings, settings_issue) = Settings::load();
+
+        // The theme picked in a previous run, unless `config.toml` has been
+        // edited since — see `theme_state` for why that is decidable.
+        let theme_id =
+            theme_state::resolve(settings.theme_name.as_deref(), ThemeState::load().as_ref());
+        settings.theme = settings.theme_for(&theme_id);
+
         // Reading a session the user has turned off would be a promise broken
         // in the direction that matters.
         let session = if settings.restore.is_off() {
@@ -86,18 +103,23 @@ impl App {
         .into_iter()
         .flatten()
         .collect();
-        Self::build(registry, key_config, settings, session, issues)
+        Self::build(registry, key_config, settings, session, theme_id, issues)
     }
 
     /// Starts from an explicit session and settings instead of reading the
     /// user's files — the seam the persistence tests drive, and the one a host
     /// embedding the app would use.
     pub fn with_settings(registry: Registry, settings: Settings, session: Session) -> Self {
+        let theme_id = settings
+            .theme_name
+            .clone()
+            .unwrap_or_else(|| themes::DEFAULT_ID.to_string());
         Self::build(
             registry,
             KeyConfig::default(),
             settings,
             session,
+            theme_id,
             Vec::new(),
         )
     }
@@ -107,12 +129,14 @@ impl App {
         key_config: KeyConfig,
         settings: Settings,
         session: Session,
+        theme_id: String,
         config_issues: Vec<String>,
     ) -> Self {
         let queue = Queue::default();
-        // Cloned into an `Rc` once here and shared by every component: a theme
-        // is read on each draw and never changes while the app runs.
-        let theme: SharedTheme = Rc::new(settings.theme.clone());
+        // One handle, cloned into every component. It holds the colors behind a
+        // `Cell` so the picker can swap them mid-run: a component handed a copy
+        // of the theme would keep drawing the old one.
+        let theme: SharedTheme = Rc::new(ThemeHandle::new(settings.theme));
 
         let mut sidebar = Sidebar::new(&registry, queue.clone(), theme.clone(), key_config);
         let mut tool_form = ToolFormComponent::new(queue.clone(), theme.clone(), key_config);
@@ -146,6 +170,7 @@ impl App {
 
         let file_open = FileOpenPopup::new(queue.clone(), theme.clone(), key_config);
         let file_save = FileSavePopup::new(queue.clone(), theme.clone(), key_config);
+        let theme_popup = ThemePopup::new(queue.clone(), theme.clone(), key_config);
 
         Self {
             registry,
@@ -160,6 +185,9 @@ impl App {
             help_popup: HelpPopup::new(theme.clone(), key_config),
             file_open,
             file_save,
+            theme_popup,
+            theme_id,
+            theme_picked: false,
             theme,
             focus: Focus::Sidebar,
             should_quit: false,
@@ -190,6 +218,11 @@ impl App {
         self.needs_redraw = false;
         let area = f.area();
 
+        // The surface first: a theme naming its own background has to paint it
+        // before anything else draws on top. The default theme's `Reset` makes
+        // this a no-op, which is why nothing else has to know about it.
+        f.render_widget(Block::default().style(self.theme.base()), area);
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Min(1), Constraint::Length(1)])
@@ -219,6 +252,7 @@ impl App {
         self.help_popup.draw(f, area)?;
         self.file_open.draw(f, area)?;
         self.file_save.draw(f, area)?;
+        self.theme_popup.draw(f, area)?;
         self.msg_popup.draw(f, area)?;
         Ok(())
     }
@@ -234,6 +268,7 @@ impl App {
             .unwrap_or("—");
 
         let block = Block::bordered()
+            .style(self.theme.base())
             .border_style(self.theme.block(focused))
             .title_style(self.theme.title(focused))
             .title(format!(" {name} "));
@@ -249,6 +284,7 @@ impl App {
             &self.help_popup,
             &self.file_open,
             &self.file_save,
+            &self.theme_popup,
             &self.palette,
             &self.sidebar,
             &self.tool_form,
@@ -294,6 +330,7 @@ impl App {
             );
         }
         cmds.push(CommandInfo::new(self.key_config.hint(keys.palette), "palette", "App").order(55));
+        cmds.push(CommandInfo::new(self.key_config.hint(keys.theme), "theme", "App").order(59));
         if in_form {
             cmds.push(CommandInfo::new(self.key_config.hint(keys.copy), "copy", "App").order(58));
         }
@@ -331,6 +368,7 @@ impl App {
             &mut self.help_popup,
             &mut self.file_open,
             &mut self.file_save,
+            &mut self.theme_popup,
             &mut self.palette,
             &mut self.sidebar,
             &mut self.tool_form,
@@ -343,6 +381,8 @@ impl App {
             let keys = &self.key_config.keys;
             if key_match(k, keys.palette) {
                 self.queue.push(InternalEvent::OpenPalette);
+            } else if key_match(k, keys.theme) {
+                self.queue.push(InternalEvent::ShowThemePicker);
             } else if key_match(k, keys.help) {
                 self.queue.push(InternalEvent::ShowHelp);
             } else if key_match(k, keys.copy) && self.focus == Focus::Workspace {
@@ -424,6 +464,25 @@ impl App {
                     self.palette.hide();
                     flags |= NeedsUpdate::ALL;
                 }
+                InternalEvent::ShowThemePicker => {
+                    self.theme_popup.show_with(&self.theme_id)?;
+                    flags |= NeedsUpdate::ALL;
+                }
+                InternalEvent::PreviewTheme(id) => {
+                    // Not stored in `theme_id`: a preview is not a choice, and
+                    // cancelling has to leave nothing behind.
+                    self.theme.set(self.settings.theme_for(id));
+                    flags |= NeedsUpdate::ALL;
+                }
+                InternalEvent::ApplyTheme(id) => {
+                    self.theme.set(self.settings.theme_for(id));
+                    self.theme_id = id.to_string();
+                    // Written on the way out, like the session — not here. The
+                    // state worth keeping is the state you left.
+                    self.theme_picked = true;
+                    self.flash = Some(format!("theme: {id}"));
+                    flags |= NeedsUpdate::ALL;
+                }
                 InternalEvent::ShowHelp => {
                     // Content generated from `commands()` right when opening, not a hardcoded list.
                     let cmds = self.all_commands();
@@ -470,6 +529,24 @@ impl App {
         Session {
             tool: Some(spec.id.to_string()),
             values: session::capture(spec, &self.tool_form.inputs(), self.settings.restore),
+        }
+    }
+
+    /// The theme pick as it would be written down, or `None` when this run has
+    /// nothing to say about the theme — nobody opened the picker, or they
+    /// cancelled out of it. Public for the same reason `session_snapshot` is:
+    /// a test can drive the choice through the real key handling and then
+    /// write it wherever it likes.
+    pub fn theme_snapshot(&self) -> Option<ThemeState> {
+        self.theme_picked
+            .then(|| ThemeState::new(self.theme_id.clone(), self.settings.theme_name.clone()))
+    }
+
+    /// Writes the theme pick out, on the way out of the TUI.
+    pub fn persist_theme(&self) -> std::io::Result<()> {
+        match self.theme_snapshot() {
+            Some(state) => state.save(),
+            None => Ok(()),
         }
     }
 

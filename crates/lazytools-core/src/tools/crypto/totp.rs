@@ -57,35 +57,12 @@ impl Default for TotpTool {
     }
 }
 
-/// RFC 4648 base32, decode only. `data-encoding` would do this in one line, but it is a
-/// whole dependency for ~20 lines used by exactly one tool — and the secret shown next
-/// to a QR code is the only base32 anything in this program will ever see.
+/// RFC 4648 base32, shared with `convert.base32`, which owns the codec. Both
+/// tolerate the padding, spaces, and dashes a secret is printed with next to a
+/// QR code; only this one insists the result be non-empty, because a key of
+/// zero bytes is not a secret.
 fn base32_decode(input: &str) -> Result<Vec<u8>, String> {
-    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-
-    let mut bits: u32 = 0;
-    let mut width: u32 = 0;
-    let mut out = Vec::new();
-
-    for c in input.chars() {
-        // Padding and the spaces authenticator apps print for readability are noise.
-        if c.is_whitespace() || c == '=' || c == '-' {
-            continue;
-        }
-        let upper = c.to_ascii_uppercase() as u8;
-        let value = ALPHABET
-            .iter()
-            .position(|&a| a == upper)
-            .ok_or_else(|| format!("`{c}` is not a base32 character"))?;
-
-        bits = (bits << 5) | value as u32;
-        width += 5;
-        if width >= 8 {
-            width -= 8;
-            out.push((bits >> width) as u8);
-        }
-    }
-
+    let out = crate::tools::convert::base32::decode(input)?;
     if out.is_empty() {
         return Err("secret decodes to zero bytes".to_string());
     }

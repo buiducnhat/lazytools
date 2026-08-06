@@ -39,6 +39,9 @@ fn run_with(mut app: App) -> Result<()> {
     if let Err(e) = app.persist_session() {
         eprintln!("lazytools: couldn't save the session: {e}");
     }
+    if let Err(e) = app.persist_theme() {
+        eprintln!("lazytools: couldn't save the theme: {e}");
+    }
     result
 }
 

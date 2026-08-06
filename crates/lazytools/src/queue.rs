@@ -19,6 +19,14 @@ pub enum InternalEvent {
     OpenPalette,
     ClosePalette,
     ShowHelp,
+    /// Open the theme picker.
+    ShowThemePicker,
+    /// Draw in this theme from the next frame on, without committing to it.
+    /// Sent on every move of the picker's cursor, and once more on cancel to
+    /// put back what was there.
+    PreviewTheme(&'static str),
+    /// Keep the previewed theme and remember it for the next run.
+    ApplyTheme(&'static str),
     CopyToClipboard(String),
     /// The user picked a file in the picker.
     OpenFile(std::path::PathBuf),

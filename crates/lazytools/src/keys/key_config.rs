@@ -192,6 +192,7 @@ impl KeyConfig {
             "confirm" => k.confirm = ev,
             "run" => k.run = ev,
             "palette" => k.palette = ev,
+            "theme" => k.theme = ev,
             "help" => k.help = ev,
             "copy" => k.copy = ev,
             "open_file" => k.open_file = ev,

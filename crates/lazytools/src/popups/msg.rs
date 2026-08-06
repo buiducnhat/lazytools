@@ -65,6 +65,7 @@ impl DrawableComponent for MsgPopup {
                 .wrap(Wrap { trim: false })
                 .block(
                     Block::bordered()
+                        .style(self.theme.base())
                         .border_style(self.theme.block(true))
                         .title(self.title),
                 ),

@@ -1,6 +1,9 @@
+pub mod base32;
 pub mod base64;
+pub mod byte_size;
 pub mod color;
 pub mod data_format;
+pub mod duration;
 pub mod hex;
 pub mod html_entity;
 pub mod json_fmt;

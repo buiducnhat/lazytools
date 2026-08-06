@@ -166,6 +166,7 @@ impl DrawableComponent for FileOpenPopup {
         f.render_widget(Clear, area);
 
         let block = Block::bordered()
+            .style(self.theme.base())
             .border_style(self.theme.block(true))
             .title_style(self.theme.title(true))
             .title(" Open file ");

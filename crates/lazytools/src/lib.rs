@@ -11,5 +11,6 @@ pub mod popups;
 pub mod queue;
 pub mod session;
 pub mod settings;
+pub mod theme_state;
 pub mod tui;
 pub mod ui;

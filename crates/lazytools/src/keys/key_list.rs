@@ -32,6 +32,8 @@ pub struct KeysList {
     /// text field needs `Enter` for line breaks.
     pub run: KeyEvent,
     pub palette: KeyEvent,
+    /// Opens the theme picker.
+    pub theme: KeyEvent,
     pub help: KeyEvent,
     pub copy: KeyEvent,
     pub open_file: KeyEvent,
@@ -76,6 +78,9 @@ impl Default for KeysList {
             // protocol, so it would silently do nothing for some users.
             run: ctrl(KeyCode::Char('r')),
             palette: ctrl(KeyCode::Char('p')),
+            // Ctrl for the same reason as the palette: a text field consumes
+            // plain characters before the app ever sees them.
+            theme: ctrl(KeyCode::Char('t')),
             help: key(KeyCode::Char('?')),
             copy: key(KeyCode::Char('y')),
             // Ctrl rather than a bare `o`/`s`: a text input field consumes plain

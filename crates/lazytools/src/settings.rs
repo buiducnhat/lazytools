@@ -11,9 +11,10 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use ratatui::style::Color;
 use serde::Deserialize;
 
-use crate::ui::{Theme, parse_color};
+use crate::ui::{Theme, parse_color, themes};
 
 /// How much of the previous session comes back on startup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -52,7 +53,30 @@ impl Restore {
 #[derive(Debug, Clone, Default)]
 pub struct Settings {
     pub restore: Restore,
+    /// The preset named by `[theme] name`, already checked to exist. `None`
+    /// when the file names none, which is also what lets a pick made in the
+    /// app be recognized as still current — see `theme_state`.
+    pub theme_name: Option<String>,
+    /// Per-color entries from `[theme]`, kept separately from the resolved
+    /// theme because they outlive it: whichever preset the picker moves to,
+    /// these still apply on top.
+    pub theme_overrides: Vec<(String, Color)>,
+    /// The theme to start with — `theme_name`'s preset with the overrides
+    /// applied.
     pub theme: Theme,
+}
+
+impl Settings {
+    /// The named preset with this file's color overrides on top. The picker
+    /// calls this for every theme it previews, which is why the overrides are
+    /// stored rather than folded into `theme` once.
+    pub fn theme_for(&self, preset_id: &str) -> Theme {
+        let mut theme = themes::find(preset_id).map_or_else(Theme::default, |p| p.theme);
+        for (slot, color) in &self.theme_overrides {
+            theme.set_color(slot, *color);
+        }
+        theme
+    }
 }
 
 /// Why the settings file didn't fully apply. Reported, never fatal.
@@ -102,6 +126,9 @@ struct RawSession {
 
 pub const FILE_NAME: &str = "config.toml";
 
+/// The one key in `[theme]` that names a preset rather than a color.
+const NAME_KEY: &str = "name";
+
 impl Settings {
     pub fn load() -> (Self, Option<SettingsIssue>) {
         match crate::paths::config_file(FILE_NAME) {
@@ -142,14 +169,31 @@ impl Settings {
         }
 
         for (name, spec) in &raw.theme {
+            if name == NAME_KEY {
+                match themes::find(spec) {
+                    Some(preset) => settings.theme_name = Some(preset.id.to_string()),
+                    None => skipped.push(format!(
+                        "  theme.name = \"{spec}\": no such theme (have: {})",
+                        themes::id_list()
+                    )),
+                }
+                continue;
+            }
             match parse_color(spec) {
-                Some(color) if settings.theme.set_color(name, color) => {}
+                // Checked against a scratch theme so an unknown slot is
+                // reported here rather than discovered on every later preview.
+                Some(color) if Theme::default().set_color(name, color) => {
+                    settings.theme_overrides.push((name.clone(), color));
+                }
                 Some(_) => skipped.push(format!("  theme.{name}: no such color in the theme")),
                 None => skipped.push(format!(
                     "  theme.{name} = \"{spec}\": not a color name, #rrggbb, or 0-255"
                 )),
             }
         }
+
+        settings.theme =
+            settings.theme_for(settings.theme_name.as_deref().unwrap_or(themes::DEFAULT_ID));
 
         let issue = (!skipped.is_empty()).then(|| SettingsIssue::Skipped {
             path: path.to_path_buf(),
@@ -228,6 +272,47 @@ mod tests {
         assert_eq!(settings.theme.text_dim, Color::Indexed(244));
         // Untouched entries keep the default.
         assert_eq!(settings.theme.error, Theme::default().error);
+    }
+
+    #[test]
+    fn a_named_preset_becomes_the_theme() {
+        let (settings, issue) = load("theme-name", "[theme]\nname = \"Dracula\"\n");
+        assert!(issue.is_none(), "{issue:?}");
+        assert_eq!(settings.theme_name.as_deref(), Some("dracula"));
+        assert_eq!(settings.theme, themes::find("dracula").unwrap().theme);
+    }
+
+    /// The two halves of `[theme]` compose: the preset is the base, the
+    /// individual colors are corrections on top of it. This also has to hold
+    /// for a preset the *picker* moves to later, which is what `theme_for` is.
+    #[test]
+    fn a_color_entry_overrides_the_named_preset() {
+        let (settings, issue) = load(
+            "theme-name-and-color",
+            "[theme]\nname = \"nord\"\nerror = \"magenta\"\n",
+        );
+        assert!(issue.is_none(), "{issue:?}");
+        let nord = themes::find("nord").unwrap().theme;
+        assert_eq!(settings.theme.text, nord.text, "the preset is the base");
+        assert_eq!(settings.theme.error, Color::Magenta, "the entry wins");
+
+        let previewed = settings.theme_for("gruvbox-dark");
+        let gruvbox = themes::find("gruvbox-dark").unwrap().theme;
+        assert_eq!(previewed.text, gruvbox.text);
+        assert_eq!(
+            previewed.error,
+            Color::Magenta,
+            "an override outlives the preset it was written against"
+        );
+    }
+
+    #[test]
+    fn an_unknown_theme_name_lists_the_ones_that_exist() {
+        let (settings, issue) = load("theme-name-bad", "[theme]\nname = \"blurple\"\n");
+        let msg = issue.expect("an unknown theme must be reported").message();
+        assert!(msg.contains("dracula"), "{msg}");
+        assert!(settings.theme_name.is_none());
+        assert_eq!(settings.theme, Theme::default());
     }
 
     /// One bad entry must not cost the user the rest of the file — the reason

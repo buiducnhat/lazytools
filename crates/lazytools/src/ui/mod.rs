@@ -1,8 +1,9 @@
 pub mod style;
+pub mod themes;
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
-pub use style::{SharedTheme, Theme, parse_color};
+pub use style::{SLOTS, SharedTheme, Theme, ThemeHandle, parse_color};
 
 /// A centered rectangular area, used for popups.
 pub fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {

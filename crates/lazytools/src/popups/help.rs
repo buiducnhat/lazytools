@@ -68,6 +68,7 @@ impl DrawableComponent for HelpPopup {
         f.render_widget(
             Paragraph::new(lines).block(
                 Block::bordered()
+                    .style(self.theme.base())
                     .border_style(self.theme.block(true))
                     .title_style(self.theme.title(true))
                     .title(" Shortcuts "),
