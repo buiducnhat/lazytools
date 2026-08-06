@@ -145,9 +145,19 @@ mod tests {
     }
 
     /// A relative `XDG_*` is ignored by the spec, not resolved against the cwd.
+    ///
+    /// The accepted value has to be spelled per platform: "absolute" on Windows
+    /// means a drive prefix, so a bare `/xdg` is *not* absolute there. Which is
+    /// the correct behavior — `absolute_only` is asking the platform, not
+    /// pattern-matching on a leading slash — but it makes the constant a
+    /// platform detail rather than a shared one.
     #[test]
     fn a_relative_xdg_value_is_ignored() {
-        assert_eq!(absolute_only(Some("/xdg".into())), Some(p("/xdg")));
+        let absolute = if cfg!(windows) { r"C:\xdg" } else { "/xdg" };
+        assert_eq!(
+            absolute_only(Some(absolute.into())),
+            Some(PathBuf::from(absolute))
+        );
         assert_eq!(absolute_only(Some("relative/dir".into())), None);
         assert_eq!(absolute_only(Some("".into())), None);
         assert_eq!(absolute_only(None), None);
