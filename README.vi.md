@@ -36,24 +36,24 @@ Gõ `lazytools` không tham số để mở giao diện:
 │  TOTP Code           │││                                                              ││
 │Convert               │││                                                              ││
 │  Base64              │││                                                              ││
-│  URL Encode          ││└──────────────────────────────────────────────────────────────┘│
-│  Hex                 ││┌ Algorithm ───────────────────────────────────────────────────┐│
-│  JSON Format         │││‹ md5 ›                                                       ││
-│  Data Format         ││└──────────────────────────────────────────────────────────────┘│
-│  Number Base         ││┌ Digest ──────────────────────────────────────────────────────┐│
-│  Unicode Escape      │││5eb63bbbe01eeed093cb22bb8f5acdc3                              ││
-│  Color Converter     ││└──────────────────────────────────────────────────────────────┘│
+│  Base32              ││└──────────────────────────────────────────────────────────────┘│
+│  URL Encode          ││┌ Algorithm ───────────────────────────────────────────────────┐│
+│  Hex                 │││‹ md5 ›                                                       ││
+│  JSON Format         ││└──────────────────────────────────────────────────────────────┘│
+│  Data Format         ││┌ Digest ──────────────────────────────────────────────────────┐│
+│  Number Base         │││5eb63bbbe01eeed093cb22bb8f5acdc3                              ││
+│  Unicode Escape      ││└──────────────────────────────────────────────────────────────┘│
+│  Color Converter     ││                                                                │
 │  HTML Entities       ││                                                                │
+│  Byte Size           ││                                                                │
+│  Duration            ││                                                                │
 │Generate              ││                                                                │
 │  Password            ││                                                                │
 │  UUID                ││                                                                │
 │  ULID                ││                                                                │
 │  Random Token        ││                                                                │
-│  Lorem Ipsum         ││                                                                │
-│Text                  ││                                                                │
-│  Change Case         ││                                                                │
 └──────────────────────┘└────────────────────────────────────────────────────────────────┘
-[Tab] next field [Esc] tools [^P] palette [^O] open file [^S] save file [y] copy [?] help 
+[Tab] next field [Esc] tools [^P] palette [^O] open file [^S] save file [y] copy [^T] them
 ```
 
 > Lưu ý: giao diện TUI hiện chỉ hiển thị tiếng Anh (xem phần "Phím tắt" bên dưới
@@ -99,7 +99,7 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 
 ## Danh mục tool
 
-29 tool trên năm category — đúng cách nhóm mà sidebar của TUI đang dùng.
+36 tool trên năm category — đúng cách nhóm mà sidebar của TUI đang dùng.
 
 **Crypto**
 
@@ -115,6 +115,7 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 | Lệnh | Mô tả |
 |---|---|
 | `base64` | Văn bản ⇄ Base64, có tùy chọn bảng chữ cái URL-safe |
+| `base32` | Văn bản ⇄ Base32 (RFC 4648) |
 | `url` | Percent-encode / decode chuỗi URL |
 | `hex` | Văn bản ⇄ hex |
 | `json-format` | Format hoặc minify JSON, giữ nguyên thứ tự khóa |
@@ -123,6 +124,8 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 | `unicode` | Escape văn bản thành chuỗi Unicode, hoặc giải mã ngược lại |
 | `color` | Chuyển màu giữa hex, RGB, HSL, HSV và CMYK |
 | `html-entity` | Escape văn bản cho HTML, hoặc giải mã entity ngược lại |
+| `byte-size` | Số byte ở dạng thô, đơn vị nhị phân (KiB) và thập phân (kB) |
+| `duration` | Khoảng thời gian dạng giây, đồng hồ, chữ dễ đọc và ISO 8601 |
 
 **Generate**
 
@@ -143,17 +146,21 @@ Hoặc chạy tại chỗ: `cargo run -p lazytools`.
 | `lines` | Sắp xếp, khử trùng lặp, trim và đánh số các dòng văn bản |
 | `diff` | So sánh hai khối văn bản theo dòng, theo từ hoặc theo ký tự |
 | `regex` | Kiểm thử biểu thức chính quy trên văn bản và xem mọi kết quả khớp |
+| `slug` | Biến một tiêu đề thành slug an toàn cho URL |
+| `escape` | Escape / unescape văn bản cho chuỗi JSON, regex hoặc shell |
 
 **Web**
 
 | Lệnh | Mô tả |
 |---|---|
 | `jwt-decode` | Giải mã JWT và tuỳ chọn xác minh chữ ký HMAC |
+| `jwt-encode` | Ký payload JSON thành JWT có chữ ký HMAC |
 | `timestamp` | Chuyển đổi giữa Unix timestamp và ngày giờ đọc được |
 | `cron` | Giải thích biểu thức cron và liệt kê các lần chạy kế tiếp |
 | `url-parse` | Tách URL thành các thành phần |
 | `json-diff` | So sánh hai tài liệu JSON theo cấu trúc |
 | `ip` | Tách khối CIDR thành network, mask, dải địa chỉ và số host |
+| `http-status` | Tra ý nghĩa của một mã trạng thái HTTP |
 
 `lazytools <lệnh> --help` cho biết đầy đủ tùy chọn — phần trợ giúp đó **sinh
 thẳng từ khai báo của tool**, nên không bao giờ lệch với hành vi thật.
@@ -175,6 +182,7 @@ Nhãn phím trong TUI hiển thị bằng tiếng Anh; bảng dưới đây dị
 | `Esc` | `tools` | Nhảy thẳng về danh sách tool, từ bất kỳ trường nào |
 | `j` `k` / `↑` `↓` | `select` | Di chuyển trong sidebar |
 | `Ctrl+P` | `palette` | Palette tìm tool (khớp mờ trên tên, từ khóa, mô tả) |
+| `Ctrl+T` | `theme` | Bảng chọn theme — xem trước khi di chuyển, `Enter` giữ lại, `Esc` trả về theme cũ |
 | `y` | `copy` | Copy output đang chọn — có fallback OSC 52 nên chạy được qua SSH |
 | `Ctrl+O` / `Ctrl+S` | `open file` / `save file` | Mở file vào input / lưu output ra file (`Ctrl+O` bị ẩn với tool không có input) |
 | `Ctrl+R` | `run` | Chạy / sinh lại, từ bất kỳ trường nào. `Enter` cũng vậy, trừ trong trường nhiều dòng — ở đó nó xuống dòng |
@@ -185,7 +193,7 @@ Nhãn phím trong TUI hiển thị bằng tiếng Anh; bảng dưới đây dị
 
 ```toml
 palette = "ctrl+k"
-focus_sidebar = "ctrl+t"
+theme = "ctrl+g"
 help = "?"
 ```
 
@@ -200,6 +208,9 @@ Mọi thứ ngoài phím tắt nằm trong `~/.config/lazytools/config.toml` (c�
 restore = "options"
 
 [theme]
+# Một trong các theme có sẵn, hoặc bỏ trống để dùng màu của chính terminal.
+name = "dracula"
+# Các màu chỉnh riêng, áp lên trên theme đang dùng.
 border_focus = "magenta"
 title = "#ff8800"
 text_dim = "244"
@@ -215,10 +226,27 @@ thường là JWT hay API token, và một tiện ích không nên tự ý giữ
 Session nằm ở `~/.local/state/lazytools/session.toml`; xóa nó chỉ mất thông tin
 tool nào đang mở.
 
-**`[theme]`** — tám màu (`border`, `border_focus`, `text`, `text_dim`, `error`,
-`selection_fg`, `selection_bg`, `title`), mỗi giá trị là tên màu, `#rrggbb`, hoặc
-chỉ số bảng màu `0`–`255`. Mặc định dùng tên màu để bám theo theme của chính
-terminal bạn đang dùng.
+**`[theme]`** — chọn một theme có sẵn bằng `name`, cộng thêm các màu chỉnh
+riêng. Có mười một theme: `terminal` (mặc định), `dracula`, `nord`,
+`gruvbox-dark`, `solarized-dark`, `catppuccin-mocha`, `tokyo-night`,
+`one-dark`, `monokai`, `solarized-light` và `github-light`.
+
+`Ctrl+T` mở bảng chọn theme, và nó **xem trước ngay khi bạn di chuyển** — toàn
+bộ giao diện phía sau popup đổi màu theo, nên bạn chọn bằng cách nhìn công cụ
+thật của mình chứ không nhìn ô màu mẫu. `Enter` giữ theme đó và nhớ cho lần
+sau; `Esc` trả lại theme lúc bạn mới mở bảng chọn.
+
+Lựa chọn đó được ghi vào `~/.local/state/lazytools/theme.toml`, không bao giờ
+ghi vào `config.toml` — lazytools không sửa file do bạn tự viết. Nếu bạn tự sửa
+`[theme] name` thì bản sửa đó luôn thắng lựa chọn cũ trong app, và xóa file
+state cũng trả quyền quyết định về cho config.
+
+Chín ô màu là `background`, `border`, `border_focus`, `text`, `text_dim`,
+`error`, `selection_fg`, `selection_bg` và `title` — mỗi giá trị là tên màu,
+`#rrggbb`, hoặc chỉ số bảng màu `0`–`255`. Chúng áp lên trên theme đã chọn, nên
+`name = "nord"` kèm `error = "magenta"` là Nord đổi đúng một màu. Theme
+`terminal` dựng hoàn toàn từ tên màu và không tự tô nền, nhờ vậy nó bám theo
+terminal của bạn dù sáng hay tối.
 
 Config hỏng **không chặn app khởi động** — lazytools vẫn mở với giá trị mặc định
 và báo rõ mục nào bị bỏ qua, để bạn vào sửa được.

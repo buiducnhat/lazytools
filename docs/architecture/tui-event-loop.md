@@ -28,7 +28,7 @@ calls as the command bar, so the two can never drift apart.
 components in priority order and calls `event_pump`:
 
 ```
-msg_popup -> help_popup -> file_open -> file_save -> palette -> sidebar -> tool_form
+msg_popup -> help_popup -> file_open -> file_save -> theme_popup -> palette -> sidebar -> tool_form
 ```
 
 `event_pump` stops at the first component that reports `Consumed`. Popups are
@@ -41,9 +41,9 @@ it ever reaches the app-level handler; read-only output fields don't consume
 it, so it falls through to the copy shortcut.
 
 If no component consumes the event, `App::event` checks its own app-level
-shortcuts (`palette`, `help`, `copy`, `open_file`, `save_file`, `quit`,
-`focus_next`/`focus_prev`, `focus_sidebar`) via `key_match` against the active
-`KeyConfig`.
+shortcuts (`palette`, `theme`, `help`, `copy`, `open_file`, `save_file`,
+`quit`, `focus_next`/`focus_prev`, `focus_sidebar`) via `key_match` against the
+active `KeyConfig`.
 
 ## Focus and layout
 
@@ -110,6 +110,12 @@ it once per loop iteration, translating each event into state changes and a
 `NeedsUpdate` bitflag. This decouples "a component decided something happened"
 from "the app decided what to do about it" — e.g. `Sidebar` pushes
 `SelectTool(id)`, and only `App` knows how to load that into `tool_form`.
+
+The theme picker is the clearest case for the indirection. It pushes
+`PreviewTheme(id)` on every cursor move and `ApplyTheme(id)` on confirm, and
+never resolves a theme itself: what those ids turn into also depends on the
+per-color overrides in `config.toml`, which belong to `Settings`. See
+[configuration-and-state.md](configuration-and-state.md).
 
 ## Run loop and debounce
 

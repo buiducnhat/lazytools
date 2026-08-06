@@ -417,6 +417,99 @@ than a typed struct so one bad color costs one entry instead of the whole file.
 Snapshot churn: **none**. Every snapshot renders the default theme, and this
 line changed no layout, no text, and no key binding.
 
+## v0.5 — the theme picker, and the third catalog expansion, 29 → 36
+
+Two threads, and the first one reverses a decision this file used to state as
+settled (see "Explicitly out of scope" below): themes *do* get presets and a
+picker. What changed is not the reasoning but the evidence — v0.4 shipped nine
+configurable colors and, in doing so, made it obvious that nobody hand-writes
+nine hex values to try Nord. The cost was in the wrong place: the feature
+existed, and reaching it required work only its author would do.
+
+### The picker previews, and that is the whole design
+
+`Ctrl+T` opens a list of eleven themes and re-themes **the entire app behind
+the popup** as the cursor moves. `Enter` keeps the theme, `Esc` restores the
+one in force when it opened. Mechanics are in
+[configuration-and-state.md](../architecture/configuration-and-state.md); three
+decisions are worth recording here.
+
+- **A swatch cannot answer the question being asked.** "Is this readable" is
+  about the tool you actually use, at your terminal's font and contrast, not
+  about five colored cells. Previewing live costs one `Cell<Theme>`; a swatch
+  would have been cheaper and would not have answered anything.
+- **`SharedTheme` became `Rc<ThemeHandle>`.** The v0.4 comment in `app.rs` read
+  "a theme is read on each draw and never changes while the app runs", and
+  every component was handed an `Rc<Theme>` on that basis. Live preview makes
+  the second half false, so the shared value is now a `Cell<Theme>` and one
+  write re-themes every holder. A `Cell` rather than a `RefCell` because
+  `Theme` is `Copy`: reading during a draw takes no borrow and cannot panic
+  re-entrantly.
+- **The ninth slot, `background`, is what made presets possible.** Eight
+  foreground colors on the terminal's own background is a color scheme, not a
+  theme — Dracula's palette on a white terminal is not Dracula. It is painted
+  once over the frame in `App::draw`, and again under each popup, since a popup
+  `Clear`s the cells beneath it. The default `Color::Reset` makes both a no-op,
+  which is why nothing else in the draw path had to learn about it.
+
+### Where a pick is stored, and the conflict that had to be resolved
+
+`paths.rs` states the rule the app must not break: config is what a *person*
+writes, state is what the *app* writes. So `Ctrl+T` cannot write `[theme] name`
+back into `config.toml`, and the pick goes to `~/.local/state/lazytools/theme.toml`.
+
+That creates one genuinely new question: both files can now name a theme. The
+answer is "whichever is newer", and the interesting part is that it needs no
+clock. `theme.toml` records the *config* theme in force at the moment of the
+pick; if `config.toml` still says that, the pick is current and wins, and if it
+says anything else, the config has been edited since and wins instead. Editing
+the config or deleting the state file both hand control back, which is the
+behavior a user would expect from either action without being told.
+
+A run that never opens the picker writes **no file at all**. Creating one
+"just in case" would silently start shadowing config edits for someone who
+never chose a theme — the cost of the wrong default here is invisible, which is
+exactly why it is worth spelling out.
+
+`[session] restore = "off"` does not switch the theme off. Persistence modes
+are about the data you were working on; the theme is a preference, and it lives
+in its own file for that reason.
+
+### The catalog: seven tools, in the same one-file-one-line shape
+
+`convert.base32`, `convert.byte-size`, `convert.duration`, `text.slug`,
+`text.escape`, `web.jwt-encode`, `web.http-status`. No new dependencies: base32
+is the ~40 lines `crypto.totp` already had, `regex::escape` was already in the
+tree, and `web.jwt-encode` reuses `hmac`/`sha2`/`base64` from its decoding
+counterpart.
+
+- **`crypto.totp`'s private base32 decoder moved into `convert.base32`.** Its
+  comment said "~20 lines used by exactly one tool", which was a fair reason to
+  hand-write it and stopped being true the moment a second tool needed the same
+  alphabet. One codec now, with the RFC 4648 vectors asserted against it.
+- **`web.jwt-encode` is checked against its own decoder, not only a vector.**
+  The published jwt.io token pins the header spelling and the compact payload;
+  a second test signs with each algorithm and asserts `web.jwt-decode` reports
+  "valid signature", because two tools disagreeing about one token is the
+  failure this pair can actually have.
+- **`text.escape` refuses to unescape `\d`.** Stripping the backslash from a
+  character class would silently turn a digit class into the letter `d` — a
+  changed meaning, not a formatting difference, so it is an error.
+- **`convert.byte-size` reads a bare `M` as 1024, and says so.** `ls -h`,
+  `du -h`, and `dd bs=1M` all mean binary by it; `MB` is the only spelling that
+  asks for 1000. Both scales are always shown, since the gap between them is
+  what people open the tool to settle.
+- **`convert.duration` refuses `1h30`.** It reads as 30 minutes to some people
+  and 30 seconds to others, and a tool that picks one silently is worse than
+  one that asks for `1h30m`.
+- **`web.http-status` reports the class for an unassigned code in range.** 499
+  is not registered; inventing a reason phrase for it would be a confident lie,
+  and "treat it as the generic status of its class" is what a client actually
+  does.
+
+Snapshot churn: the expected six — the sidebar shifts in every layout snapshot
+when tools are added, and the command bar and help popup gained `^T theme`.
+
 ## Explicitly out of scope
 
 Still deferred:
@@ -424,9 +517,12 @@ Still deferred:
 - **`exp` / `nbf` validation in `web.jwt-decode`** — deliberately omitted so the
   tool stays a pure function of its input; decoding and expiry-checking are
   different jobs.
-- **A theme editor, theme presets, and live config reload.** `config.toml` is
-  read once at startup. Editing colors is rare enough that restarting a program
-  that opens instantly is not a burden worth building a UI to avoid.
+- **A theme *editor*, and live config reload.** The presets and the picker
+  shipped in v0.5 — this item used to bundle all three, and the bundling was
+  the mistake: choosing between eleven themes is a one-keystroke job, while
+  editing individual colors is rare enough that `config.toml` plus a restart of
+  a program that opens instantly is not a burden worth building a UI to avoid.
+  `config.toml` is still read once at startup.
 - **Restoring a form when switching tools within one run** — see above; this is
   a deliberate non-goal, not an unfinished one.
 - Image conversion, document conversion, any tool requiring network access, or a

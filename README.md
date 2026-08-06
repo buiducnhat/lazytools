@@ -36,24 +36,24 @@ Run `lazytools` with no arguments to open the interface:
 │  TOTP Code           │││                                                              ││
 │Convert               │││                                                              ││
 │  Base64              │││                                                              ││
-│  URL Encode          ││└──────────────────────────────────────────────────────────────┘│
-│  Hex                 ││┌ Algorithm ───────────────────────────────────────────────────┐│
-│  JSON Format         │││‹ md5 ›                                                       ││
-│  Data Format         ││└──────────────────────────────────────────────────────────────┘│
-│  Number Base         ││┌ Digest ──────────────────────────────────────────────────────┐│
-│  Unicode Escape      │││5eb63bbbe01eeed093cb22bb8f5acdc3                              ││
-│  Color Converter     ││└──────────────────────────────────────────────────────────────┘│
+│  Base32              ││└──────────────────────────────────────────────────────────────┘│
+│  URL Encode          ││┌ Algorithm ───────────────────────────────────────────────────┐│
+│  Hex                 │││‹ md5 ›                                                       ││
+│  JSON Format         ││└──────────────────────────────────────────────────────────────┘│
+│  Data Format         ││┌ Digest ──────────────────────────────────────────────────────┐│
+│  Number Base         │││5eb63bbbe01eeed093cb22bb8f5acdc3                              ││
+│  Unicode Escape      ││└──────────────────────────────────────────────────────────────┘│
+│  Color Converter     ││                                                                │
 │  HTML Entities       ││                                                                │
+│  Byte Size           ││                                                                │
+│  Duration            ││                                                                │
 │Generate              ││                                                                │
 │  Password            ││                                                                │
 │  UUID                ││                                                                │
 │  ULID                ││                                                                │
 │  Random Token        ││                                                                │
-│  Lorem Ipsum         ││                                                                │
-│Text                  ││                                                                │
-│  Change Case         ││                                                                │
 └──────────────────────┘└────────────────────────────────────────────────────────────────┘
-[Tab] next field [Esc] tools [^P] palette [^O] open file [^S] save file [y] copy [?] help 
+[Tab] next field [Esc] tools [^P] palette [^O] open file [^S] save file [y] copy [^T] them
 ```
 
 ## Install
@@ -96,7 +96,7 @@ Or run it in place: `cargo run -p lazytools`.
 
 ## Tool catalog
 
-29 tools across five categories — the same grouping the TUI sidebar uses.
+36 tools across five categories — the same grouping the TUI sidebar uses.
 
 **Crypto**
 
@@ -112,6 +112,7 @@ Or run it in place: `cargo run -p lazytools`.
 | Command | Description |
 |---|---|
 | `base64` | Text ⇄ Base64, with an optional URL-safe alphabet |
+| `base32` | Text ⇄ Base32 (RFC 4648) |
 | `url` | Percent-encode / decode a URL string |
 | `hex` | Text ⇄ hex |
 | `json-format` | Format or minify JSON, preserving key order |
@@ -120,6 +121,8 @@ Or run it in place: `cargo run -p lazytools`.
 | `unicode` | Escape text to Unicode sequences, or decode them back |
 | `color` | Convert a color between hex, RGB, HSL, HSV, and CMYK |
 | `html-entity` | Escape text for HTML, or decode entities back to text |
+| `byte-size` | A byte count in raw, binary (KiB), and decimal (kB) units |
+| `duration` | A duration as seconds, a clock, human text, and ISO 8601 |
 
 **Generate**
 
@@ -140,17 +143,21 @@ Or run it in place: `cargo run -p lazytools`.
 | `lines` | Sort, deduplicate, trim, and number lines of text |
 | `diff` | Compare two blocks of text by line, word, or character |
 | `regex` | Test a regular expression against text and see every match |
+| `slug` | Turn a title into a URL-safe slug |
+| `escape` | Escape or unescape text for a JSON string, a regex, or a shell |
 
 **Web**
 
 | Command | Description |
 |---|---|
 | `jwt-decode` | Decode a JWT and optionally verify its HMAC signature |
+| `jwt-encode` | Sign a JSON payload into an HMAC-signed JWT |
 | `timestamp` | Convert between Unix timestamps and human-readable dates |
 | `cron` | Explain a cron expression and list its next runs |
 | `url-parse` | Break a URL into its parts |
 | `json-diff` | Compare two JSON documents structurally |
 | `ip` | Break a CIDR block into network, mask, range, and host count |
+| `http-status` | Look up what an HTTP status code means |
 
 `lazytools <command> --help` shows the full set of options — that help text is
 **generated directly from the tool's declaration**, so it never drifts from
@@ -171,6 +178,7 @@ actual behavior.
 | `Esc` | Jump straight back to the tool list, from any field |
 | `j` `k` / `↑` `↓` | Move within the sidebar |
 | `Ctrl+P` | Tool-finder palette (fuzzy match on name, keywords, description) |
+| `Ctrl+T` | Theme picker — previews as you move, `Enter` keeps it, `Esc` puts the old one back |
 | `y` | Copy the currently focused output — falls back to OSC 52 so it works over SSH |
 | `Ctrl+O` / `Ctrl+S` | Open a file into the input / save output to a file (`Ctrl+O` is hidden for tools that take no input) |
 | `Ctrl+R` | Run / regenerate, from any field. `Enter` does the same, except in a multiline field where it inserts a line break |
@@ -181,7 +189,7 @@ Remap keys via `~/.config/lazytools/keys.toml`:
 
 ```toml
 palette = "ctrl+k"
-focus_sidebar = "ctrl+t"
+theme = "ctrl+g"
 help = "?"
 ```
 
@@ -196,6 +204,9 @@ Everything other than key bindings lives in `~/.config/lazytools/config.toml`
 restore = "options"
 
 [theme]
+# One of the built-in themes, or leave it out for the terminal's own colors.
+name = "dracula"
+# Individual corrections, applied on top of whichever theme is in use.
 border_focus = "magenta"
 title = "#ff8800"
 text_dim = "244"
@@ -212,10 +223,27 @@ setting left behind.
 lives in `~/.local/state/lazytools/session.toml`; deleting it costs you nothing
 but which tool was open.
 
-**`[theme]`** — eight colors (`border`, `border_focus`, `text`, `text_dim`,
-`error`, `selection_fg`, `selection_bg`, `title`), each a color name, `#rrggbb`,
-or a `0`–`255` palette index. The defaults are named colors, so they follow your
-terminal's own theme.
+**`[theme]`** — a built-in theme by `name`, plus any per-color corrections.
+Eleven themes ship: `terminal` (the default), `dracula`, `nord`,
+`gruvbox-dark`, `solarized-dark`, `catppuccin-mocha`, `tokyo-night`,
+`one-dark`, `monokai`, `solarized-light`, and `github-light`.
+
+`Ctrl+T` opens the picker, which **previews as you move** — the whole interface
+re-themes behind the popup, so you choose by looking at your own tool rather
+than at a swatch. `Enter` keeps the theme and remembers it for next time; `Esc`
+puts back the one you started with.
+
+The pick is written to `~/.local/state/lazytools/theme.toml`, never into your
+`config.toml` — lazytools does not edit files you hand-write. Editing
+`[theme] name` yourself always wins over an earlier pick, and deleting the
+state file hands control back to the config too.
+
+The nine color slots are `background`, `border`, `border_focus`, `text`,
+`text_dim`, `error`, `selection_fg`, `selection_bg`, and `title` — each a color
+name, `#rrggbb`, or a `0`–`255` palette index. They apply on top of the named
+theme, so `name = "nord"` with `error = "magenta"` is Nord with one color
+changed. The `terminal` theme is built entirely from named colors and paints no
+background of its own, which is why it follows your terminal, light or dark.
 
 A broken config **does not block startup** — lazytools still opens with the
 defaults and clearly reports which entries were skipped, so you can go fix them.

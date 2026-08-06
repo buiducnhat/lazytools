@@ -19,13 +19,16 @@ crates/
       tools/                # one subdirectory per Category, one file per tool
         mod.rs              # register_all() — the ONLY place every tool is listed
         crypto/             # hash.rs, hmac.rs, bcrypt.rs, totp.rs
-        convert/            # base64.rs, url.rs, hex.rs, json_fmt.rs,
+        convert/            # base64.rs, base32.rs, url.rs, hex.rs, json_fmt.rs,
                             #   data_format.rs, number_base.rs, unicode.rs,
-                            #   color.rs, html_entity.rs
+                            #   color.rs, html_entity.rs, byte_size.rs,
+                            #   duration.rs
         generate/           # password.rs, uuid.rs, ulid.rs, token.rs, lorem.rs
-        text/               # case.rs, stats.rs, lines.rs, diff.rs, regex.rs
-        web/                # jwt_decode.rs, timestamp.rs, cron.rs,
-                            #   url_parse.rs, json_diff.rs, ip.rs
+        text/               # case.rs, stats.rs, lines.rs, diff.rs, regex.rs,
+                            #   slug.rs, escape.rs
+        web/                # jwt_decode.rs, jwt_encode.rs, timestamp.rs,
+                            #   cron.rs, url_parse.rs, json_diff.rs, ip.rs,
+                            #   http_status.rs
     tests/
       spec_invariants.rs    # registry-wide invariants (see code-standard/testing-conventions.md)
 
@@ -41,6 +44,8 @@ crates/
       paths.rs                # config vs state directories, XDG-aware
       settings.rs             # config.toml — [session] and [theme]
       session.rs              # session.toml — last tool + values, secrets excluded
+      theme_state.rs          # theme.toml — the theme picked in the app, and
+                              #   which config it was picked against
       cli/
         mod.rs                # builds the whole clap Command tree from Registry
       keys/
@@ -62,14 +67,16 @@ crates/
         msg.rs                  # info/error popup
         file_open.rs             # Ctrl+O — directory browser, size-limited
         file_save.rs              # Ctrl+S — path entry + overwrite confirmation
+        theme.rs                   # Ctrl+T — theme picker, previews as it moves
       ui/
         mod.rs                  # centered_rect() and other layout helpers
-        style.rs                 # Theme/SharedTheme
+        style.rs                 # Theme (nine colors), ThemeHandle/SharedTheme
+        themes.rs                 # the built-in theme presets
     tests/
       cli.rs                    # end-to-end CLI tests (assert_cmd, one process per test)
       file_io.rs                 # App-level file open/save tests (simulated key events)
       session.rs                  # App-level persistence tests (restore, capture, secrets)
-      theme.rs                     # asserts configured colors reach the rendered cells
+      theme.rs                     # colors and the Ctrl+T picker, asserted on rendered cells
       snapshots.rs                  # insta snapshot tests over TestBackend renders
       snapshots/*.snap               # committed snapshot fixtures
 ```
@@ -81,14 +88,14 @@ and dispatches purely on argument count — any argument at all routes to the
 CLI (`cli::run`), otherwise it starts the TUI
 (`tui::run_with_user_config`). The CLI reads no config file and writes no
 session; the TUI reads `keys.toml` and `config.toml` if present, and reads and
-writes `session.toml` — see
+writes `session.toml` and `theme.toml` — see
 [architecture/configuration-and-state.md](../architecture/configuration-and-state.md).
 
 ## Why the app logic lives in `lib.rs`, not just `main.rs`
 
 `crates/lazytools/src/lib.rs` re-exports `app`, `cli`, `clipboard`,
-`components`, `keys`, `paths`, `popups`, `queue`, `session`, `settings`, `tui`,
-`ui` from a library target specifically so that
+`components`, `keys`, `paths`, `popups`, `queue`, `session`, `settings`,
+`theme_state`, `tui`, `ui` from a library target specifically so that
 `crates/lazytools/tests/*.rs` (integration tests, which can only import from a
 library crate) can construct `App` directly and drive it with simulated
 key events — this is what makes `file_io.rs`, `session.rs`, `theme.rs`, and

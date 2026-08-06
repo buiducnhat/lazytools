@@ -3,7 +3,7 @@
 **lazytools** — an offline, keyboard-first terminal utility belt: a TUI plus a
 set of CLI subcommands sharing one spec-driven tool registry, built in Rust
 (edition 2024) with `ratatui` + `clap` on top of a UI-framework-free core crate.
-The catalog holds **29 tools** across five categories (Crypto, Convert,
+The catalog holds **36 tools** across five categories (Crypto, Convert,
 Generate, Text, Web), each declared in a single file and registered with a
 single line.
 
@@ -20,7 +20,7 @@ System design, component interactions, data flows, deployment, and external inte
 | [spec-driven-tools.md](architecture/spec-driven-tools.md) | How `ToolSpec` + the `Tool` trait let the CLI and TUI both generate themselves from one declaration per tool; the three `RunMode`s and the two deliberate exceptions to `run()` purity |
 | [tui-event-loop.md](architecture/tui-event-loop.md) | `Component`/`DrawableComponent` pattern, event routing order, focus/layout, the internal event queue, and the 16ms poll/debounce loop |
 | [file-io.md](architecture/file-io.md) | Open/save file popups: size limits, overwrite confirmation, missing-parent-directory handling, and why tools with no inputs refuse "open file" |
-| [configuration-and-state.md](architecture/configuration-and-state.md) | `keys.toml` / `config.toml` / `session.toml`: config vs state directories, the never-block-startup failure policy, what persistence keeps and what it refuses to keep, `[theme]`, and the two clipboard backends |
+| [configuration-and-state.md](architecture/configuration-and-state.md) | `keys.toml` / `config.toml` / `session.toml` / `theme.toml`: config vs state directories, the never-block-startup failure policy, what persistence keeps and what it refuses to keep, the built-in themes and the `Ctrl+T` picker, and the two clipboard backends |
 
 ## Codebase
 
@@ -48,7 +48,7 @@ Product goals, use cases, business rules, and constraints.
 | File | Description |
 | ---- | ------------ |
 | [product-goals.md](project-pdr/product-goals.md) | Central design thesis (open tool catalog, cost-of-addition must stay flat) and the two times it was measured, pipeline-first CLI contract, reliability expectations |
-| [scope-and-roadmap.md](project-pdr/scope-and-roadmap.md) | What shipped in the MVP, the three v0.2 catalog batches and their design decisions, the v0.2.x interaction-debt line, the v0.3 catalog expansion, the v0.4 portability/persistence line, and what remains explicitly out of scope |
+| [scope-and-roadmap.md](project-pdr/scope-and-roadmap.md) | What shipped in the MVP, the three v0.2 catalog batches and their design decisions, the v0.2.x interaction-debt line, the v0.3 catalog expansion, the v0.4 portability/persistence line, the v0.5 theme picker and third catalog expansion, and what remains explicitly out of scope |
 
 ## Other
 
