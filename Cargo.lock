@@ -1166,6 +1166,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "assert_cmd",
+ "base64 0.23.0",
  "bitflags 2.13.1",
  "clap",
  "hex",

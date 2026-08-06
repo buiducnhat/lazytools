@@ -23,6 +23,9 @@ unicode-segmentation.workspace = true
 unicode-width.workspace = true
 nucleo.workspace = true
 arboard.workspace = true
+# The OSC 52 clipboard fallback encodes its payload — already in the tree via
+# lazytools-core, so this adds no crate to the build.
+base64.workspace = true
 toml.workspace = true
 serde.workspace = true
 

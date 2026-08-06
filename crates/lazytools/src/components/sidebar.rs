@@ -90,6 +90,26 @@ impl Sidebar {
         }
     }
 
+    /// Moves the highlight onto `id`. Returns `false` if no such tool is listed.
+    ///
+    /// Deliberately does **not** queue `SelectTool`: this is what `App` calls
+    /// *while handling* one, so that a tool picked from the palette — or
+    /// restored from the last session — leaves the sidebar pointing at the tool
+    /// actually on screen rather than at whatever was there before.
+    pub fn select_tool(&mut self, id: &str) -> bool {
+        match self
+            .rows
+            .iter()
+            .position(|r| matches!(r, Row::Tool { id: row_id, .. } if *row_id == id))
+        {
+            Some(idx) => {
+                self.selected = idx;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Moves to the next tool row in the direction of `delta`, skipping group headers.
     fn move_selection(&mut self, delta: isize) {
         let mut idx = self.selected as isize;

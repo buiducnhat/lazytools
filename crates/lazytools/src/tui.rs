@@ -24,19 +24,25 @@ pub fn run_with_user_config(registry: Registry) -> Result<()> {
     run_with(App::from_user_config(registry))
 }
 
-fn run_with(app: App) -> Result<()> {
+fn run_with(mut app: App) -> Result<()> {
     // `ratatui::init()` already installs a panic hook that restores the terminal.
     let mut terminal = ratatui::init();
     execute!(stdout(), EnableBracketedPaste)?;
 
-    let result = run_loop(&mut terminal, app);
+    let result = run_loop(&mut terminal, &mut app);
 
     let _ = execute!(stdout(), DisableBracketedPaste);
     ratatui::restore();
+
+    // After the terminal is back: there is no popup to show this in, and a
+    // session that failed to save must not be a silent failure either.
+    if let Err(e) = app.persist_session() {
+        eprintln!("lazytools: couldn't save the session: {e}");
+    }
     result
 }
 
-fn run_loop(terminal: &mut ratatui::DefaultTerminal, mut app: App) -> Result<()> {
+fn run_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
     loop {
         if app.needs_redraw() {
             let mut draw_err = None;

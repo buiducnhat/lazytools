@@ -209,6 +209,27 @@ impl ToolFormComponent {
         self.input_count > 0
     }
 
+    /// Sets one editable field by key. Returns `false` when the tool has no such
+    /// field — outputs are excluded on purpose, since they are produced by a run
+    /// rather than set.
+    ///
+    /// Used to put a restored session back into the form; the caller has already
+    /// checked the value against the spec.
+    pub fn set_field_value(&mut self, key: &str, value: &Value) -> bool {
+        match self
+            .widgets
+            .iter_mut()
+            .take(self.editable_count)
+            .find(|w| w.key() == key)
+        {
+            Some(w) => {
+                w.set_value(value);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Loads file content into the **primary input** (the spec's first input field).
     /// The tool still only receives plain text — reading the file is the UI layer's job.
     pub fn set_primary_input(&mut self, text: &str) {

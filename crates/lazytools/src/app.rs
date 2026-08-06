@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use anyhow::Result;
-use lazytools_core::registry::Registry;
+use lazytools_core::registry::{Registry, Tool};
 use ratatui::Frame;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -16,7 +16,9 @@ use crate::components::{CommandInfo, Component, DrawableComponent, command_pump,
 use crate::keys::{KeyConfig, key_match};
 use crate::popups::{FileOpenPopup, FileSavePopup, HelpPopup, MsgPopup};
 use crate::queue::{InternalEvent, NeedsUpdate, Queue};
-use crate::ui::{SharedTheme, Theme};
+use crate::session::{self, Session};
+use crate::settings::Settings;
+use crate::ui::SharedTheme;
 
 /// Responsive breakpoints: below 80 cols the sidebar shrinks to icons; below 60 it's hidden entirely.
 const SIDEBAR_WIDTH: u16 = 24;
@@ -35,6 +37,7 @@ pub struct App {
     queue: Queue,
     theme: SharedTheme,
     key_config: KeyConfig,
+    settings: Settings,
     sidebar: Sidebar,
     tool_form: ToolFormComponent,
     palette: Palette,
@@ -51,38 +54,94 @@ pub struct App {
 }
 
 impl App {
-    /// Uses default keys — for tests and for cases where there's no HOME.
+    /// Defaults throughout, and no session — for tests and for cases where
+    /// there's no HOME.
     pub fn new(registry: Registry) -> Self {
-        Self::with_key_config(registry, KeyConfig::default(), None)
+        Self::build(
+            registry,
+            KeyConfig::default(),
+            Settings::default(),
+            Session::default(),
+            Vec::new(),
+        )
     }
 
-    /// Reads `~/.config/lazytools/keys.toml`. A broken config does **not** block
-    /// startup: the app still opens, with a popup explaining the issue so the user can go fix it.
+    /// Reads `keys.toml`, `config.toml`, and the saved session. A broken config
+    /// does **not** block startup: the app still opens, with a popup explaining
+    /// the issue so the user can go fix it.
     pub fn from_user_config(registry: Registry) -> Self {
-        let (key_config, issue) = KeyConfig::load();
-        Self::with_key_config(registry, key_config, issue.map(|i| i.message()))
+        let (key_config, key_issue) = KeyConfig::load();
+        let (settings, settings_issue) = Settings::load();
+        // Reading a session the user has turned off would be a promise broken
+        // in the direction that matters.
+        let session = if settings.restore.is_off() {
+            Session::default()
+        } else {
+            Session::load()
+        };
+        let issues = [
+            key_issue.map(|i| i.message()),
+            settings_issue.map(|i| i.message()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        Self::build(registry, key_config, settings, session, issues)
     }
 
-    fn with_key_config(
+    /// Starts from an explicit session and settings instead of reading the
+    /// user's files — the seam the persistence tests drive, and the one a host
+    /// embedding the app would use.
+    pub fn with_settings(registry: Registry, settings: Settings, session: Session) -> Self {
+        Self::build(
+            registry,
+            KeyConfig::default(),
+            settings,
+            session,
+            Vec::new(),
+        )
+    }
+
+    fn build(
         registry: Registry,
         key_config: KeyConfig,
-        config_issue: Option<String>,
+        settings: Settings,
+        session: Session,
+        config_issues: Vec<String>,
     ) -> Self {
         let queue = Queue::default();
-        let theme: SharedTheme = Rc::new(Theme::default());
+        // Cloned into an `Rc` once here and shared by every component: a theme
+        // is read on each draw and never changes while the app runs.
+        let theme: SharedTheme = Rc::new(settings.theme.clone());
 
-        let sidebar = Sidebar::new(&registry, queue.clone(), theme.clone(), key_config);
+        let mut sidebar = Sidebar::new(&registry, queue.clone(), theme.clone(), key_config);
         let mut tool_form = ToolFormComponent::new(queue.clone(), theme.clone(), key_config);
+
+        // A tool that has since been removed from the catalog leaves the sidebar
+        // on its default selection rather than opening nothing.
+        let restored = session
+            .tool
+            .as_deref()
+            .filter(|id| sidebar.select_tool(id))
+            .is_some();
 
         // Open the first tool by default so the initial screen isn't empty.
         if let Some(tool) = sidebar.selected_tool().and_then(|id| registry.get(id)) {
             tool_form.set_tool(tool.spec());
+            if restored {
+                // After `set_tool`, which has just loaded every field's default.
+                for (key, value) in
+                    session::restorable(tool.spec(), &session.values, settings.restore)
+                {
+                    tool_form.set_field_value(key, &value);
+                }
+            }
         }
 
         let palette = Palette::new(&registry, queue.clone(), theme.clone(), key_config);
         let mut msg_popup = MsgPopup::new(theme.clone(), key_config);
-        if let Some(msg) = config_issue {
-            msg_popup.show_error(msg);
+        if !config_issues.is_empty() {
+            msg_popup.show_error(config_issues.join("\n\n"));
         }
 
         let file_open = FileOpenPopup::new(queue.clone(), theme.clone(), key_config);
@@ -92,6 +151,7 @@ impl App {
             registry,
             queue,
             key_config,
+            settings,
             sidebar,
             tool_form,
             palette,
@@ -333,6 +393,10 @@ impl App {
                 InternalEvent::SelectTool(id) => {
                     if let Some(tool) = self.registry.get(id) {
                         self.tool_form.set_tool(tool.spec());
+                        // Also for the tool the *palette* just picked: without
+                        // this the sidebar keeps highlighting the previous one,
+                        // so the list and the open form disagree.
+                        self.sidebar.select_tool(id);
                     }
                     flags |= NeedsUpdate::OUTPUT | NeedsUpdate::COMMANDS;
                 }
@@ -369,8 +433,10 @@ impl App {
                 }
                 InternalEvent::CopyToClipboard(text) => {
                     // Failure must state the reason clearly — no panic, no silent failure.
+                    // Success names the backend: over SSH the text lands in the
+                    // *terminal's* clipboard, and that is worth saying out loud.
                     match clipboard::copy(&text) {
-                        Ok(()) => self.flash = Some("copied".to_string()),
+                        Ok(backend) => self.flash = Some(backend.flash().to_string()),
                         Err(e) => self.msg_popup.show_error(e),
                     }
                     flags |= NeedsUpdate::ALL;
@@ -387,6 +453,35 @@ impl App {
             }
         }
         Ok(flags)
+    }
+
+    /// What the next run should reopen with. Empty when the open tool has been
+    /// closed, or when persistence is off.
+    pub fn session_snapshot(&self) -> Session {
+        let Some(spec) = self
+            .tool_form
+            .tool_id()
+            .and_then(|id| self.registry.get(id))
+            .map(Tool::spec)
+            .filter(|_| !self.settings.restore.is_off())
+        else {
+            return Session::default();
+        };
+        Session {
+            tool: Some(spec.id.to_string()),
+            values: session::capture(spec, &self.tool_form.inputs(), self.settings.restore),
+        }
+    }
+
+    /// Writes the session out. Called on the way out of the TUI.
+    ///
+    /// With persistence off this **removes** any file an earlier setting left
+    /// behind — switching it off has to mean the data is gone, not just unread.
+    pub fn persist_session(&self) -> std::io::Result<()> {
+        if self.settings.restore.is_off() {
+            return Session::clear();
+        }
+        self.session_snapshot().save()
     }
 
     /// Loads a file's content into the currently open tool's primary input.
