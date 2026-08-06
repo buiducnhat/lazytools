@@ -78,6 +78,12 @@ Done — the tool now shows up in the sidebar, the `Ctrl+P` palette, and
   specific problem (not just "invalid input") — the CLI layer prefixes it with
   `--flag-name:` or the field name automatically, so the message itself only
   needs to describe what's wrong.
+- Declare a credential as `Field::secret(...)`, never as `Field::text(...)` with
+  a note. `FieldKind::Secret` is what masks it on screen **and** what keeps it
+  out of the saved session — session persistence filters by kind, so a secret
+  declared as text would be written to disk by
+  [`session.rs`](../architecture/configuration-and-state.md) with nothing to
+  catch it.
 
 ## Writing a generator
 

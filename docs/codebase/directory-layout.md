@@ -32,11 +32,15 @@ crates/
   lazytools/               # binary crate: TUI + CLI + main()
     src/
       main.rs               # entry point: argv.len() > 1 -> CLI, else -> TUI
-      lib.rs                # re-exports app/cli/clipboard/components/keys/popups/queue/tui/ui
+      lib.rs                # re-exports app/cli/clipboard/components/keys/paths/
+                            #   popups/queue/session/settings/tui/ui
       app.rs                # App — top-level state, layout, event routing, queue draining
       tui.rs                # terminal setup/teardown, 16ms poll loop, debounce tick
       queue.rs               # InternalEvent, NeedsUpdate, Queue (Rc<RefCell<VecDeque<_>>>)
-      clipboard.rs            # arboard wrapper, text-only
+      clipboard.rs            # native (arboard) + OSC 52 clipboard, text-only
+      paths.rs                # config vs state directories, XDG-aware
+      settings.rs             # config.toml — [session] and [theme]
+      session.rs              # session.toml — last tool + values, secrets excluded
       cli/
         mod.rs                # builds the whole clap Command tree from Registry
       keys/
@@ -64,8 +68,10 @@ crates/
     tests/
       cli.rs                    # end-to-end CLI tests (assert_cmd, one process per test)
       file_io.rs                 # App-level file open/save tests (simulated key events)
-      snapshots.rs                # insta snapshot tests over TestBackend renders
-      snapshots/*.snap             # committed snapshot fixtures
+      session.rs                  # App-level persistence tests (restore, capture, secrets)
+      theme.rs                     # asserts configured colors reach the rendered cells
+      snapshots.rs                  # insta snapshot tests over TestBackend renders
+      snapshots/*.snap               # committed snapshot fixtures
 ```
 
 ## Entry point
@@ -73,14 +79,17 @@ crates/
 `crates/lazytools/src/main.rs` is intentionally tiny: it builds a `Registry`,
 and dispatches purely on argument count — any argument at all routes to the
 CLI (`cli::run`), otherwise it starts the TUI
-(`tui::run_with_user_config`). The CLI reads no config file; the TUI reads
-`~/.config/lazytools/keys.toml` if present.
+(`tui::run_with_user_config`). The CLI reads no config file and writes no
+session; the TUI reads `keys.toml` and `config.toml` if present, and reads and
+writes `session.toml` — see
+[architecture/configuration-and-state.md](../architecture/configuration-and-state.md).
 
 ## Why the app logic lives in `lib.rs`, not just `main.rs`
 
-`crates/lazytools/src/lib.rs` re-exports `app`, `cli`, `components`, `keys`,
-`popups`, `queue`, `tui`, `ui` from a library target specifically so that
+`crates/lazytools/src/lib.rs` re-exports `app`, `cli`, `clipboard`,
+`components`, `keys`, `paths`, `popups`, `queue`, `session`, `settings`, `tui`,
+`ui` from a library target specifically so that
 `crates/lazytools/tests/*.rs` (integration tests, which can only import from a
 library crate) can construct `App` directly and drive it with simulated
-key events — this is what makes `file_io.rs` and `snapshots.rs` possible
-without spawning a real terminal.
+key events — this is what makes `file_io.rs`, `session.rs`, `theme.rs`, and
+`snapshots.rs` possible without spawning a real terminal.

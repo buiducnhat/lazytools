@@ -318,21 +318,119 @@ form got big enough to notice.
 Both are `KeyConfig` entries, so `quit = "q"` in `keys.toml` restores the old
 behavior for anyone who wants it.
 
+## v0.4 — the rest of the interaction debt
+
+v0.2.x named two kinds of debt and paid down only the first (constraints leaking
+into tool specs). This line closes the second: *additive comfort and
+portability* — the three items the previous roadmap left on the deferred list.
+None of them adds a tool; the catalog stays at 29.
+
+- **An OSC 52 clipboard fallback**, so `y` works over SSH.
+- **Cross-session persistence** — the last open tool and its values.
+- **A configurable theme.**
+
+The last two share one new file, `~/.config/lazytools/config.toml`, with a
+`[session]` and a `[theme]` section. `keys.toml` keeps its own file: it shipped
+in the MVP, and moving it would have broken every existing install to save one
+inode. Mechanics are in
+[configuration-and-state.md](../architecture/configuration-and-state.md); what
+follows is why the choices are what they are.
+
+### The clipboard chooses by session, not by preference
+
+Two backends — `arboard` (the machine the process runs on) and OSC 52 (the
+terminal emulator, which over SSH is the machine the user is sitting at). Which
+one is *correct* is a fact about where the terminal is, so it isn't a setting.
+
+Over SSH, OSC 52 is tried **first**, not as a fallback. Falling back only on
+failure sounds safer and is wrong: a remote host may have a perfectly working X
+clipboard, so `arboard` would succeed and put the text somewhere the user cannot
+paste from. Success that lands in the wrong place is worse than an error.
+
+The two refusals are both consequences of the same property — OSC 52 has no
+reply, so a failed copy is undetectable:
+
+- **Over 64KB is refused with the limit stated.** Terminal limits vary and none
+  of them reports truncation, and a clipboard silently holding half a document
+  is worse than a copy that says it didn't happen.
+- **GNU screen is refused outright.** Unlike tmux, screen has no passthrough a
+  program can switch on for itself, so the bytes would vanish while the app
+  flashed "copied". Under tmux the sequence is DCS-wrapped and works with
+  `allow-passthrough` on.
+
+The flash names the backend that took the text, because the two put it in
+different places and only the user knows which they wanted.
+
+### Persistence keeps options by default, not inputs
+
+The deferred item read "preserve input values between runs", and the shipped
+default deliberately does not. `restore` has three modes — `off`, `options`
+(default), `all` — because options and inputs are different kinds of thing. An
+option is how you like a tool configured; an input is the data you were working
+on, and in *this* catalog that is routinely a JWT, an API token, or a payload
+pasted in to decode. `all` is one line of config away for anyone who wants it;
+the reverse default would be a surprise noticed only after it mattered.
+
+`off` **deletes** any file an earlier setting left behind rather than just
+ignoring it. Turning persistence off has to mean the data is gone.
+
+Three rules hold in every mode, and each is a test rather than a comment:
+
+- **A `Secret` is never written** — enforced by `FieldKind`, so a tool declaring
+  a new secret inherits it. The end-to-end test types into `crypto.hmac`'s key
+  field in the *most* permissive mode and asserts the string is absent from the
+  bytes on disk.
+- **Outputs are never written.** They are derived; a restored one could
+  contradict the form above it.
+- **A restored value is re-validated against the spec it goes into.** A session
+  file outlives the catalog that wrote it, so a removed `Select` option, a
+  narrowed `Number` range, or a changed type is dropped rather than forced in.
+
+Writing happens on the way out, *after* the terminal is restored, so a failure
+can be reported on stderr instead of into a screen that no longer exists.
+
+Within a run, switching tools still resets the form to its defaults. Restoring
+across runs and restoring across a tool switch are different promises, and
+making the second one too would leave no way to get a clean form back.
+
+### The bug this line surfaced
+
+`InternalEvent::SelectTool` rebuilt the form without moving the sidebar
+highlight. Picking a tool from the `Ctrl+P` palette therefore left the list
+pointing at one tool while the form showed another — reachable since the palette
+shipped in the MVP, and invisible in tests because `TestBackend::to_string()`
+throws styles away and the highlight *is* a style. The regression test reads the
+selection off the buffer's background colors instead, and was verified to fail
+against the unfixed code.
+
+Session restore needed the same `Sidebar::select_tool`, which is how the bug
+turned up at all.
+
+### Theme colors are named by default on purpose
+
+Eight slots, three notations: a name (`cyan`, `dark-gray`, `reset`), `#rrggbb`,
+or a `0`–`255` palette index. Named colors remain the defaults because they
+follow the user's own terminal theme — a hard-coded `#1e1e2e` is wrong the
+moment someone switches to a light background. `[theme]` is a plain map rather
+than a typed struct so one bad color costs one entry instead of the whole file.
+
+Snapshot churn: **none**. Every snapshot renders the default theme, and this
+line changed no layout, no text, and no key binding.
+
 ## Explicitly out of scope
 
 Still deferred:
 
-- **Cross-session persistence** — the app does not remember which tool was
-  open or preserve input values between runs. Planned for the `v0.2.x` line;
-  note that `FieldKind::Secret` values (`crypto.hmac`'s key,
-  `crypto.bcrypt`'s password) must never be written to disk.
 - **`exp` / `nbf` validation in `web.jwt-decode`** — deliberately omitted so the
   tool stays a pure function of its input; decoding and expiry-checking are
   different jobs.
-- **OSC52 clipboard fallback for SSH sessions** — next up in the `v0.2.x` line.
-- Image conversion, document conversion, any tool requiring network access,
-  a plugin runtime, or a theme editor.
-- OSC52 clipboard fallback for SSH sessions.
+- **A theme editor, theme presets, and live config reload.** `config.toml` is
+  read once at startup. Editing colors is rare enough that restarting a program
+  that opens instantly is not a burden worth building a UI to avoid.
+- **Restoring a form when switching tools within one run** — see above; this is
+  a deliberate non-goal, not an unfinished one.
+- Image conversion, document conversion, any tool requiring network access, or a
+  plugin runtime.
 
 ## Reading this alongside the archived plan
 

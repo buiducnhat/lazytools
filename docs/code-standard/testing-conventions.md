@@ -49,17 +49,26 @@ exists at the CLI layer: stdin piping, `--json`, exit code conventions (2 for
 clap usage errors, 1 for `ToolError::InvalidInput` reaching `run()`), and
 `--help` content.
 
-## 4. TUI tests (`crates/lazytools/tests/file_io.rs`, `snapshots.rs`)
+## 4. TUI tests (`crates/lazytools/tests/file_io.rs`, `session.rs`, `theme.rs`, `snapshots.rs`)
 
 Construct `App` directly (importable because the app logic lives in
 `lib.rs`, not just `main.rs`) and drive it with simulated
 `ratatui::crossterm::event::Event`s against a `ratatui::backend::TestBackend`
 — no real terminal needed. Two flavors:
 
-- **Behavioral** (`file_io.rs`): asserts on file-write side effects and
-  specific rendered strings (e.g. "must ask for confirmation"). Uses a
-  `TempDir` helper that only ever touches `std::env::temp_dir()`, never files
-  inside the repo.
+- **Behavioral** (`file_io.rs`, `session.rs`): asserts on file-write side
+  effects and specific rendered strings (e.g. "must ask for confirmation").
+  Uses a `TempDir` helper that only ever touches `std::env::temp_dir()`, never
+  files inside the repo. `App::with_settings(registry, settings, session)` is
+  the seam for anything config- or persistence-dependent — construct the state
+  explicitly rather than writing to the user's real config directory, which a
+  test must never touch.
+- **Style** (`theme.rs`, and the sidebar-highlight test in `session.rs`): reads
+  `terminal.backend().buffer()` and asserts on cell `fg`/`bg`. Reach for this
+  whenever the behavior under test *is* a style: `TestBackend::to_string()`
+  throws styles away, so a string assertion would pass no matter which row was
+  highlighted. That is exactly how the palette/sidebar desync survived from the
+  MVP to v0.4 unnoticed.
 - **Snapshot** (`snapshots.rs`): uses [`insta`](https://insta.rs) to assert the
   full rendered screen buffer matches a committed `.snap` file. First run
   produces a `.snap.new`; review and accept with `cargo insta review` (or

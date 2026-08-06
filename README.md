@@ -53,7 +53,7 @@ Run `lazytools` with no arguments to open the interface:
 │Text                  ││                                                                │
 │  Change Case         ││                                                                │
 └──────────────────────┘└────────────────────────────────────────────────────────────────┘
-[Tab] next field [^P] palette [^O] open file [^S] save file [y] copy [?] help [q] quit    
+[Tab] next field [Esc] tools [^P] palette [^O] open file [^S] save file [y] copy [?] help 
 ```
 
 ## Install
@@ -171,7 +171,7 @@ actual behavior.
 | `Esc` | Jump straight back to the tool list, from any field |
 | `j` `k` / `↑` `↓` | Move within the sidebar |
 | `Ctrl+P` | Tool-finder palette (fuzzy match on name, keywords, description) |
-| `y` | Copy the currently focused output |
+| `y` | Copy the currently focused output — falls back to OSC 52 so it works over SSH |
 | `Ctrl+O` / `Ctrl+S` | Open a file into the input / save output to a file (`Ctrl+O` is hidden for tools that take no input) |
 | `Ctrl+R` | Run / regenerate, from any field. `Enter` does the same, except in a multiline field where it inserts a line break |
 | `?` | Help |
@@ -185,8 +185,49 @@ focus_sidebar = "ctrl+t"
 help = "?"
 ```
 
+## Configuration
+
+Everything other than key bindings lives in `~/.config/lazytools/config.toml`
+(`$XDG_CONFIG_HOME` is honored):
+
+```toml
+[session]
+# "off" | "options" (default) | "all"
+restore = "options"
+
+[theme]
+border_focus = "magenta"
+title = "#ff8800"
+text_dim = "244"
+```
+
+**`[session]`** — lazytools reopens on the tool you left, with its options as
+you had them. Input fields are *not* saved by default: in this catalog an input
+is routinely a JWT or an API token, and that is not something a utility should
+keep on disk without being asked. Set `restore = "all"` to save them too, or
+`"off"` to save nothing — `"off"` also deletes any session file an earlier
+setting left behind.
+
+**A password or key field is never written to disk in any mode.** The session
+lives in `~/.local/state/lazytools/session.toml`; deleting it costs you nothing
+but which tool was open.
+
+**`[theme]`** — eight colors (`border`, `border_focus`, `text`, `text_dim`,
+`error`, `selection_fg`, `selection_bg`, `title`), each a color name, `#rrggbb`,
+or a `0`–`255` palette index. The defaults are named colors, so they follow your
+terminal's own theme.
+
 A broken config **does not block startup** — lazytools still opens with the
-default keys and clearly reports which entries were skipped, so you can go fix them.
+defaults and clearly reports which entries were skipped, so you can go fix them.
+
+### Copying over SSH
+
+`y` writes to the system clipboard, and falls back to an OSC 52 escape sequence
+when there isn't one — which is what makes copying work over SSH. In an SSH
+session the order flips: the terminal's clipboard is tried first, because that
+is the machine you can actually paste on. Inside tmux the sequence is wrapped
+for `allow-passthrough`; GNU screen can't forward it at all and lazytools says
+so rather than pretending the copy worked.
 
 ## Adding a new tool
 

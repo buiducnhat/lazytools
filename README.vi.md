@@ -53,7 +53,7 @@ Gõ `lazytools` không tham số để mở giao diện:
 │Text                  ││                                                                │
 │  Change Case         ││                                                                │
 └──────────────────────┘└────────────────────────────────────────────────────────────────┘
-[Tab] next field [^P] palette [^O] open file [^S] save file [y] copy [?] help [q] quit    
+[Tab] next field [Esc] tools [^P] palette [^O] open file [^S] save file [y] copy [?] help 
 ```
 
 > Lưu ý: giao diện TUI hiện chỉ hiển thị tiếng Anh (xem phần "Phím tắt" bên dưới
@@ -175,7 +175,7 @@ Nhãn phím trong TUI hiển thị bằng tiếng Anh; bảng dưới đây dị
 | `Esc` | `tools` | Nhảy thẳng về danh sách tool, từ bất kỳ trường nào |
 | `j` `k` / `↑` `↓` | `select` | Di chuyển trong sidebar |
 | `Ctrl+P` | `palette` | Palette tìm tool (khớp mờ trên tên, từ khóa, mô tả) |
-| `y` | `copy` | Copy output đang chọn |
+| `y` | `copy` | Copy output đang chọn — có fallback OSC 52 nên chạy được qua SSH |
 | `Ctrl+O` / `Ctrl+S` | `open file` / `save file` | Mở file vào input / lưu output ra file (`Ctrl+O` bị ẩn với tool không có input) |
 | `Ctrl+R` | `run` | Chạy / sinh lại, từ bất kỳ trường nào. `Enter` cũng vậy, trừ trong trường nhiều dòng — ở đó nó xuống dòng |
 | `?` | `help` | Trợ giúp |
@@ -189,8 +189,47 @@ focus_sidebar = "ctrl+t"
 help = "?"
 ```
 
-Config hỏng **không chặn app khởi động** — lazytools vẫn mở với phím mặc định và
-báo rõ mục nào bị bỏ qua, để bạn vào sửa được.
+## Cấu hình
+
+Mọi thứ ngoài phím tắt nằm trong `~/.config/lazytools/config.toml` (có tôn trọng
+`$XDG_CONFIG_HOME`):
+
+```toml
+[session]
+# "off" | "options" (mặc định) | "all"
+restore = "options"
+
+[theme]
+border_focus = "magenta"
+title = "#ff8800"
+text_dim = "244"
+```
+
+**`[session]`** — lazytools mở lại đúng tool bạn đang dùng, với các option y như
+lúc thoát. Các trường input **không** được lưu mặc định: trong catalog này input
+thường là JWT hay API token, và một tiện ích không nên tự ý giữ chúng trên đĩa.
+Đặt `restore = "all"` nếu muốn lưu cả input, hoặc `"off"` để không lưu gì —
+`"off"` còn xóa luôn file session do thiết lập trước đó để lại.
+
+**Trường mật khẩu / khóa không bao giờ được ghi ra đĩa, ở bất kỳ chế độ nào.**
+Session nằm ở `~/.local/state/lazytools/session.toml`; xóa nó chỉ mất thông tin
+tool nào đang mở.
+
+**`[theme]`** — tám màu (`border`, `border_focus`, `text`, `text_dim`, `error`,
+`selection_fg`, `selection_bg`, `title`), mỗi giá trị là tên màu, `#rrggbb`, hoặc
+chỉ số bảng màu `0`–`255`. Mặc định dùng tên màu để bám theo theme của chính
+terminal bạn đang dùng.
+
+Config hỏng **không chặn app khởi động** — lazytools vẫn mở với giá trị mặc định
+và báo rõ mục nào bị bỏ qua, để bạn vào sửa được.
+
+### Copy qua SSH
+
+`y` ghi vào clipboard hệ thống, và fallback sang escape sequence OSC 52 khi
+không có clipboard — nhờ vậy copy qua SSH vẫn chạy. Trong phiên SSH thì thứ tự
+đảo lại: thử clipboard của terminal trước, vì đó mới là máy bạn dán được. Trong
+tmux, sequence được bọc lại cho `allow-passthrough`; GNU screen thì không
+chuyển tiếp được, và lazytools báo thẳng thay vì giả vờ đã copy xong.
 
 ## Thêm một tool mới
 
