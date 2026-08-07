@@ -8,14 +8,14 @@ use anyhow::Result;
 use lazytools_core::error::ToolError;
 use lazytools_core::spec::{RunMode, ToolSpec};
 use lazytools_core::value::{Inputs, Outputs, Value};
+use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::Frame;
-use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Paragraph, Wrap};
 
 use super::field::{FieldWidget, build};
-use super::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState};
+use super::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState, LastArea};
 use crate::keys::{KeyConfig, key_match};
 use crate::queue::{InternalEvent, Queue};
 use crate::ui::SharedTheme;
@@ -48,6 +48,8 @@ pub struct ToolFormComponent {
     queue: Queue,
     theme: SharedTheme,
     key_config: KeyConfig,
+    /// Published for the App-level outside-click guard.
+    last_area: LastArea,
 }
 
 impl ToolFormComponent {
@@ -66,6 +68,7 @@ impl ToolFormComponent {
             queue,
             theme,
             key_config,
+            last_area: LastArea::default(),
         }
     }
 
@@ -92,6 +95,7 @@ impl ToolFormComponent {
         self.input_count = spec.inputs.len();
         self.focus = 0;
         self.scroll_top.set(0);
+        self.last_area.set(Rect::default());
         self.mode = spec.mode;
         self.error = None;
         self.run_at = None;
@@ -247,6 +251,7 @@ impl ToolFormComponent {
 
 impl DrawableComponent for ToolFormComponent {
     fn draw(&self, f: &mut Frame, rect: Rect) -> Result<()> {
+        self.last_area.set(rect);
         if self.widgets.is_empty() {
             f.render_widget(
                 Paragraph::new("Select a tool in the sidebar.").style(self.theme.dim()),
@@ -392,8 +397,75 @@ impl Component for ToolFormComponent {
     }
 
     fn event(&mut self, ev: &Event) -> Result<EventState> {
-        if !self.focused || self.widgets.is_empty() {
+        if self.widgets.is_empty() {
             return Ok(EventState::NotConsumed);
+        }
+
+        // Mouse events bypass the focus gate: a click on the form
+        // always responds, so the user can switch panes with the mouse
+        // even when the sidebar currently holds focus.
+        if !self.focused
+            && !matches!(ev, Event::Mouse(_))
+        {
+            return Ok(EventState::NotConsumed);
+        }
+
+        if let Event::Mouse(m) = ev {
+            let rect = self.last_area.get();
+            if m.kind == MouseEventKind::Down(MouseButton::Left) {
+                // First check the status badge at the bottom.
+                let badge_h = if self.widgets.is_empty() { 0 } else {
+                    let heights: u16 = self.widgets.iter().map(|w| w.desired_height()).sum();
+                    let status_h = u16::from(matches!(
+                        self.effective_mode(),
+                        RunMode::OnDemand | RunMode::Generate
+                    ));
+                    let error_h = u16::from(self.error.is_some());
+                    let visible_fields = rect.height.saturating_sub(status_h).saturating_sub(error_h);
+                    if heights > visible_fields { status_h } else { 0 }
+                };
+                let status_bottom = rect.y + rect.height - (if self.error.is_some() { 4 } else { 0 });
+                if badge_h > 0 && m.row == status_bottom - 1 {
+                    // Click on the badge → run.
+                    if matches!(self.effective_mode(), RunMode::OnDemand | RunMode::Generate) {
+                        self.queue.push(InternalEvent::RunRequested);
+                        return Ok(EventState::Consumed);
+                    }
+                }
+
+                // Find which widget was clicked.
+                let mut y = rect.y;
+                let heights: Vec<u16> = self.widgets.iter().map(|w| w.desired_height()).collect();
+                for (i, h) in heights.iter().enumerate() {
+                    if m.row >= y && m.row < y + *h {
+                        let _prev_focus = self.focus;
+                        self.focus = i;
+                        self.queue.push(InternalEvent::FocusPane(crate::app::Focus::Workspace));
+                        let before = self.widgets[i].value();
+                        let block = Block::bordered();
+                        let inner = block.inner(Rect { x: rect.x, y, width: rect.width, height: *h });
+                        let state = self.widgets[i].event_mouse(
+                            m.column,
+                            m.row.saturating_sub(inner.y),
+                            inner,
+                            &self.key_config,
+                        )?;
+                        if state.is_consumed() && self.widgets[i].value() != before {
+                            self.queue.push(InternalEvent::InputChanged);
+                        }
+                        return Ok(state);
+                    }
+                    y += *h;
+                }
+            } else if matches!(m.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
+                // Wheel over the form moves focus between editable fields.
+                let delta = if matches!(m.kind, MouseEventKind::ScrollUp) { -1 } else { 1 };
+                let next = (self.focus as isize + delta)
+                    .rem_euclid(self.editable_count as isize) as usize;
+                self.focus = next;
+                return Ok(EventState::Consumed);
+            }
+            return Ok(EventState::Consumed);
         }
 
         if let Event::Key(k) = ev {

@@ -3,16 +3,16 @@ use std::cell::RefCell;
 use anyhow::Result;
 use lazytools_core::registry::Registry;
 use lazytools_core::spec::Category;
+use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::Frame;
-use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, List, ListItem, ListState};
 
-use super::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState};
+use super::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState, LastArea};
 use crate::keys::{KeyConfig, key_match};
 use crate::queue::{InternalEvent, Queue};
-use crate::ui::SharedTheme;
+use crate::ui::{inside, SharedTheme};
 
 /// A flat list with group headers. A tool's `id`/`name` are both `&'static str`,
 /// so the sidebar doesn't need to borrow `Registry` after construction.
@@ -42,6 +42,9 @@ pub struct Sidebar {
     queue: Queue,
     theme: SharedTheme,
     key_config: KeyConfig,
+    /// Published for the App-level outside-click guard. Written at the start of `draw`
+    /// so the event handler can compare a click position to the pane's last rect.
+    last_area: LastArea,
 }
 
 impl Sidebar {
@@ -79,6 +82,7 @@ impl Sidebar {
             queue,
             theme,
             key_config,
+            last_area: LastArea::default(),
         }
     }
 
@@ -132,6 +136,7 @@ impl Sidebar {
 impl DrawableComponent for Sidebar {
     fn draw(&self, f: &mut Frame, rect: Rect) -> Result<()> {
         // Below 60 cols the sidebar is hidden entirely, `App` passes an empty rect.
+        self.last_area.set(rect);
         if rect.width == 0 {
             return Ok(());
         }
@@ -197,9 +202,44 @@ impl Component for Sidebar {
     }
 
     fn event(&mut self, ev: &Event) -> Result<EventState> {
-        if !self.focused {
+        // Mouse events bypass the focus gate: a click on the sidebar
+        // always responds, so the user can switch panes with the mouse
+        // even when the form currently holds focus.
+        if !self.focused
+            && !matches!(ev, Event::Mouse(_))
+        {
             return Ok(EventState::NotConsumed);
         }
+
+        if let Event::Mouse(m) = ev {
+            let rect = self.last_area.get();
+            // A click outside the sidebar's pane falls through to the outside-click guard.
+            if !inside(rect, m.column, m.row) {
+                return Ok(EventState::NotConsumed);
+            }
+            let block = Block::bordered(); // border is 1
+            let inner = block.inner(rect);
+            let Event::Mouse(m) = ev else { unreachable!() };
+            match m.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    let offset = self.list_state.borrow().offset();
+                    // `inner.y` is already `rect.y + 1` due to the border.
+                    // Don't add another 1 — the first list row is at `inner.y`.
+                    let row = m.row.saturating_sub(inner.y);
+                    let idx = offset + row as usize;
+                    if let Some(Row::Tool { id, .. }) = self.rows.get(idx) {
+                        self.selected = idx;
+                        self.queue.push(InternalEvent::SelectTool(id));
+                        self.queue.push(InternalEvent::FocusPane(crate::app::Focus::Sidebar));
+                    }
+                }
+                MouseEventKind::ScrollUp => self.move_selection(-1),
+                MouseEventKind::ScrollDown => self.move_selection(1),
+                _ => {}
+            }
+            return Ok(EventState::Consumed);
+        }
+
         let Event::Key(k) = ev else {
             return Ok(EventState::NotConsumed);
         };

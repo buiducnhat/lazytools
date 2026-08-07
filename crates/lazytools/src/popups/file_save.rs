@@ -8,16 +8,16 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::Frame;
-use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
 
 use crate::components::field::textarea::TextArea;
-use crate::components::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState};
+use crate::components::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState, LastArea};
 use crate::keys::{KeyConfig, key_match, typed_char};
 use crate::queue::{InternalEvent, Queue};
-use crate::ui::{SharedTheme, centered_rect};
+use crate::ui::{inside, SharedTheme, centered_rect};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
@@ -35,6 +35,8 @@ pub struct FileSavePopup {
     queue: Queue,
     theme: SharedTheme,
     key_config: KeyConfig,
+    /// Published for the App-level outside-click guard.
+    last_area: LastArea,
 }
 
 impl FileSavePopup {
@@ -48,6 +50,7 @@ impl FileSavePopup {
             queue,
             theme,
             key_config,
+            last_area: LastArea::default(),
         }
     }
 
@@ -111,6 +114,7 @@ impl DrawableComponent for FileSavePopup {
             return Ok(());
         }
         let area = centered_rect(60, 30, rect);
+        self.last_area.set(area);
         f.render_widget(Clear, area);
 
         let block = Block::bordered()
@@ -191,6 +195,29 @@ impl Component for FileSavePopup {
             && self.stage == Stage::EnteringPath
         {
             self.path_input.insert_str(text);
+            return Ok(EventState::Consumed);
+        }
+
+        if let Event::Mouse(m) = ev {
+            let area = self.last_area.get();
+            if !inside(area, m.column, m.row) {
+                return Ok(EventState::Consumed);
+            }
+            let block = Block::bordered();
+            let inner = block.inner(area);
+            let rows = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Min(1)])
+                .split(inner);
+            if let MouseEventKind::Down(MouseButton::Left) = m.kind
+                && m.row == rows[1].y
+            {
+                // Click on the message row: confirm on overwrite prompt, ignore otherwise.
+                if self.stage == Stage::ConfirmOverwrite {
+                    let path = self.target();
+                    self.write(&path);
+                }
+            }
             return Ok(EventState::Consumed);
         }
 

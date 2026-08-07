@@ -105,4 +105,15 @@ impl FieldWidget for ToggleWidget {
     fn is_readonly(&self) -> bool {
         false
     }
+
+    fn event_mouse(
+        &mut self,
+        _col: u16,
+        _row: u16,
+        _inner: Rect,
+        _keys: &KeyConfig,
+    ) -> Result<EventState> {
+        self.on = !self.on;
+        Ok(EventState::Consumed)
+    }
 }

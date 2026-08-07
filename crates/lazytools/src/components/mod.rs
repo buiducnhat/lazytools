@@ -1,5 +1,5 @@
 //! Two core traits, shaped after gitui. Anything that can be drawn is a
-//! `DrawableComponent`; anything that receives keys and declares its own commands is a `Component`.
+//! `DrawableComponent`; anything that receives input events and declares its own commands is a `Component`.
 
 pub mod cmdbar;
 pub mod field;
@@ -7,10 +7,21 @@ pub mod palette;
 pub mod sidebar;
 pub mod tool_form;
 
+use std::cell::Cell;
+
 use anyhow::Result;
 use ratatui::Frame;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
+
+/// A component's last drawn `Rect`, written at the start of `draw`. The App reads this
+/// during event dispatch to decide whether a click landed inside the component.
+///
+/// `Cell` rather than `RefCell` because `draw(&self, ...)` only has a shared reference —
+/// writing the rect inside `draw` needs interior mutability. Resetting to `Rect::default()`
+/// at the top of every `draw` is what keeps a popup that was visible last frame but is
+/// hidden this frame from claiming a click against a stale rect.
+pub type LastArea = Cell<Rect>;
 
 pub trait DrawableComponent {
     fn draw(&self, f: &mut Frame, rect: Rect) -> Result<()>;

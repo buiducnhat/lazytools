@@ -1,7 +1,7 @@
 # TUI architecture: components, event routing, and the run loop
 
 The TUI (`crates/lazytools/src/`) is modeled after gitui's component pattern:
-small, focus-aware widgets that each own their own key handling and command
+small, focus-aware widgets that each own their own input handling and command
 advertisement, composed by a top-level `App`.
 
 ## `Component` and `DrawableComponent`
@@ -44,6 +44,36 @@ If no component consumes the event, `App::event` checks its own app-level
 shortcuts (`palette`, `theme`, `help`, `copy`, `open_file`, `save_file`,
 `quit`, `focus_next`/`focus_prev`, `focus_sidebar`) via `key_match` against the
 active `KeyConfig`.
+
+### Mouse routing and the last-area pattern
+
+Mouse events follow the same routing order as keyboard events. Every component
+writes its last drawn `Rect` to a `Cell<Rect>` (`LastArea`) at the top of
+`draw`, and every `event()` arm branches on `Event::Mouse` *before* the
+key-handling block, using `crate::ui::inside(rect, col, row)` to check whether
+the click landed inside its area.
+
+The App-level outside-click guard runs **after** the inner pump: if a
+`Mouse(Down(Left))` wasn't consumed by any component (i.e., it landed outside
+every popup's rect), `App::event` walks popups in reverse z-order (by draw
+order) and closes the topmost visible one. This is how clicking anywhere
+outside a popup dismisses it — the popup itself doesn't need to know it was
+clicked *outside*.
+
+Scroll-wheel events route by the same rules: a wheel over the sidebar scrolls
+the sidebar list; a wheel over `ToolForm` steps through editable fields; wheels
+inside a popup's list (Palette, Theme, FileOpen) move its selection. Wheels
+that fall outside every component are harmlessly consumed at the App level.
+
+`MouseEventKind::Moved` is filtered out in the run loop alongside the Windows
+`KeyEventKind::Release` filter, to avoid redrawing on every pixel of cursor
+motion when nothing has changed state.
+
+**Known limitations.** Click inside a text/text-area field sets focus but does
+not position the cursor at the click point (cursor stays at end-of-text).
+Double-click is only used for the Theme popup's "click to preview, double-click
+to apply" semantics; no other double-click gestures exist. Right-click and drag
+are ignored everywhere.
 
 ## Focus and layout
 

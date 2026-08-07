@@ -120,4 +120,28 @@ impl FieldWidget for SelectWidget {
     fn is_readonly(&self) -> bool {
         false
     }
+
+    fn event_mouse(
+        &mut self,
+        col: u16,
+        _row: u16,
+        inner: Rect,
+        _keys: &KeyConfig,
+    ) -> Result<EventState> {
+        if self.options.is_empty() {
+            return Ok(EventState::NotConsumed);
+        }
+        // ‹ is the first character, › is the last.  The widget draws
+        // `format!("‹ {} ›", self.current())` so ‹ is at `inner.x` and
+        // › is at `inner.x + inner.width - 1`.
+        if col <= inner.x + 1 {
+            self.index = (self.index + self.options.len() - 1) % self.options.len();
+        } else if col >= inner.x + inner.width.saturating_sub(1) {
+            self.index = (self.index + 1) % self.options.len();
+        } else {
+            // Click on the value body: same as move_right.
+            self.index = (self.index + 1) % self.options.len();
+        }
+        Ok(EventState::Consumed)
+    }
 }

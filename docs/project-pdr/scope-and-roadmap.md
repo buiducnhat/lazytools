@@ -510,6 +510,21 @@ counterpart.
 Snapshot churn: the expected six — the sidebar shifts in every layout snapshot
 when tools are added, and the command bar and help popup gained `^T theme`.
 
+### Delivered — mouse parity
+
+On the v0.5 branch: click and scroll work everywhere a key does. Click the
+sidebar to select a tool; click a form field to focus it; click a popup's list
+row to activate it; scroll to move selections; click outside a popup to dismiss
+it. The implementation is hardcoded (no `[mouse]` config block) and lives
+entirely in the existing component `event()` arms — no new trait methods, no
+new dependency. `MouseEventKind::Moved` is filtered out in the run loop to
+avoid wasted redraws.
+
+Known limitations: click-to-position cursor inside text/text-area fields is not
+implemented (focus only). Double-click is only recognized in the Theme popup
+(single click = preview, double-click = apply). Right-click and drag are
+ignored.
+
 ## Explicitly out of scope
 
 Still deferred:

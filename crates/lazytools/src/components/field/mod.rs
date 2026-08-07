@@ -38,6 +38,19 @@ pub trait FieldWidget {
     fn wants_confirm_key(&self) -> bool {
         false
     }
+
+    /// Handles a mouse click at `(col, row)` within this widget's **inner** area.
+    /// Returns `Consumed` when the click changed the widget's value (e.g., a toggle).
+    /// Default: `NotConsumed` — focus-only widgets don't need to override this.
+    fn event_mouse(
+        &mut self,
+        _col: u16,
+        _row: u16,
+        _inner: Rect,
+        _keys: &KeyConfig,
+    ) -> Result<EventState> {
+        Ok(EventState::NotConsumed)
+    }
 }
 
 /// Builds a widget from a spec `Field`. This is the **only place** that maps

@@ -3,21 +3,23 @@
 //! cmdbar: help never drifts from the real key bindings.
 
 use anyhow::Result;
+use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::Frame;
-use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
 
-use crate::components::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState};
+use crate::components::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState, LastArea};
 use crate::keys::{KeyConfig, key_match};
-use crate::ui::{SharedTheme, centered_rect};
+use crate::ui::{inside, SharedTheme, centered_rect};
 
 pub struct HelpPopup {
     cmds: Vec<CommandInfo>,
     visible: bool,
     theme: SharedTheme,
     key_config: KeyConfig,
+    /// Published for the App-level outside-click guard.
+    last_area: LastArea,
 }
 
 impl HelpPopup {
@@ -27,6 +29,7 @@ impl HelpPopup {
             visible: false,
             theme,
             key_config,
+            last_area: LastArea::default(),
         }
     }
 
@@ -44,6 +47,7 @@ impl DrawableComponent for HelpPopup {
             return Ok(());
         }
         let area = centered_rect(60, 70, rect);
+        self.last_area.set(area);
         f.render_widget(Clear, area);
 
         let mut lines = Vec::new();
@@ -104,6 +108,14 @@ impl Component for HelpPopup {
     fn event(&mut self, ev: &Event) -> Result<EventState> {
         if !self.visible {
             return Ok(EventState::NotConsumed);
+        }
+        if let Event::Mouse(m) = ev {
+            if matches!(m.kind, MouseEventKind::Down(MouseButton::Left))
+                && inside(self.last_area.get(), m.column, m.row)
+            {
+                self.hide();
+            }
+            return Ok(EventState::Consumed);
         }
         if let Event::Key(k) = ev {
             let keys = &self.key_config.keys;

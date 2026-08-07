@@ -9,17 +9,17 @@ use anyhow::Result;
 use lazytools_core::registry::Registry;
 use nucleo::Matcher;
 use nucleo::pattern::{CaseMatching, Normalization, Pattern};
+use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::Frame;
-use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Paragraph};
 
 use super::field::textarea::TextArea;
-use super::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState};
+use super::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState, LastArea};
 use crate::keys::{KeyConfig, key_match, typed_char};
 use crate::queue::{InternalEvent, Queue};
-use crate::ui::{SharedTheme, centered_rect};
+use crate::ui::{inside, SharedTheme, centered_rect};
 
 /// A selectable entry — `haystack` is pre-joined so we don't concatenate strings on every keystroke.
 struct Entry {
@@ -40,6 +40,8 @@ pub struct Palette {
     queue: Queue,
     theme: SharedTheme,
     key_config: KeyConfig,
+    /// Published for the App-level outside-click guard.
+    last_area: LastArea,
 }
 
 impl Palette {
@@ -78,6 +80,7 @@ impl Palette {
             queue,
             theme,
             key_config,
+            last_area: LastArea::default(),
         };
         palette.refilter();
         palette
@@ -132,6 +135,7 @@ impl DrawableComponent for Palette {
             return Ok(());
         }
         let area = centered_rect(70, 60, rect);
+        self.last_area.set(area);
         f.render_widget(Clear, area);
 
         let block = Block::bordered()
@@ -217,6 +221,44 @@ impl Component for Palette {
         if let Event::Paste(text) = ev {
             self.input.insert_str(text);
             self.refilter();
+            return Ok(EventState::Consumed);
+        }
+
+        if let Event::Mouse(m) = ev {
+            let area = self.last_area.get();
+            // Click outside the popup: close it.
+            if !inside(area, m.column, m.row) {
+                self.queue.push(InternalEvent::ClosePalette);
+                return Ok(EventState::Consumed);
+            }
+            // Recompute the inner layout exactly as `draw` does.
+            let block = Block::bordered();
+            let inner = block.inner(area);
+            let rows = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Min(1)])
+                .split(inner);
+            let Event::Mouse(m) = ev else { unreachable!() };
+            match m.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    if m.row == rows[0].y {
+                        // Click on the search input — just focus it (cursor is always at the end).
+                    } else if m.row >= rows[1].y && m.row < rows[1].y + rows[1].height {
+                        // Click on a list row.
+                        let idx = (m.row - rows[1].y) as usize;
+                        if idx < self.filtered.len() {
+                            self.selected = idx;
+                            if let Some(id) = self.selected_id() {
+                                self.queue.push(InternalEvent::SelectTool(id));
+                            }
+                            self.queue.push(InternalEvent::ClosePalette);
+                        }
+                    }
+                }
+                MouseEventKind::ScrollUp => self.move_selection(-1),
+                MouseEventKind::ScrollDown => self.move_selection(1),
+                _ => {}
+            }
             return Ok(EventState::Consumed);
         }
 

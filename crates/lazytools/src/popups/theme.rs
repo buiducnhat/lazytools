@@ -12,17 +12,17 @@
 //! settings and not the picker's business.
 
 use anyhow::Result;
+use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::Frame;
-use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Paragraph};
 
-use crate::components::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState};
+use crate::components::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState, LastArea};
 use crate::keys::{KeyConfig, key_match};
 use crate::queue::{InternalEvent, Queue};
-use crate::ui::{SharedTheme, centered_rect, themes};
+use crate::ui::{inside, SharedTheme, centered_rect, themes};
 
 pub struct ThemePopup {
     selected: usize,
@@ -34,6 +34,8 @@ pub struct ThemePopup {
     queue: Queue,
     theme: SharedTheme,
     key_config: KeyConfig,
+    /// Published for the App-level outside-click guard.
+    last_area: LastArea,
 }
 
 impl ThemePopup {
@@ -45,6 +47,7 @@ impl ThemePopup {
             queue,
             theme,
             key_config,
+            last_area: LastArea::default(),
         }
     }
 
@@ -74,6 +77,7 @@ impl DrawableComponent for ThemePopup {
             return Ok(());
         }
         let area = centered_rect(50, 60, rect);
+        self.last_area.set(area);
         f.render_widget(Clear, area);
 
         let block = Block::bordered()
@@ -170,6 +174,41 @@ impl Component for ThemePopup {
         if !self.visible {
             return Ok(EventState::NotConsumed);
         }
+
+        if let Event::Mouse(m) = ev {
+            let area = self.last_area.get();
+            if !inside(area, m.column, m.row) {
+                return Ok(EventState::Consumed);
+            }
+            // Recompute the inner layout exactly as `draw` does.
+            let block = Block::bordered();
+            let inner = block.inner(area);
+            let rows = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(1), Constraint::Length(1)])
+                .split(inner);
+            let Event::Mouse(m) = ev else { unreachable!() };
+            match m.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    if m.row == rows[1].y {
+                        // Click on hint row: apply the current selection.
+                        self.queue.push(InternalEvent::ApplyTheme(themes::PRESETS[self.selected].id));
+                        self.visible = false;
+                    } else if m.row >= rows[0].y && m.row < rows[0].y + rows[0].height {
+                        let idx = (m.row - rows[0].y) as usize;
+                        if idx < themes::PRESETS.len() {
+                            self.selected = idx;
+                            self.preview(self.selected);
+                        }
+                    }
+                }
+                MouseEventKind::ScrollUp => self.move_selection(-1),
+                MouseEventKind::ScrollDown => self.move_selection(1),
+                _ => {}
+            }
+            return Ok(EventState::Consumed);
+        }
+
         let Event::Key(k) = ev else {
             return Ok(EventState::Consumed);
         };

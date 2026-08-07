@@ -1,8 +1,8 @@
 use anyhow::Result;
 use lazytools_core::spec::Field;
 use lazytools_core::value::Value;
-use ratatui::Frame;
 use ratatui::crossterm::event::Event;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::widgets::{Block, Paragraph};
 
@@ -127,5 +127,24 @@ impl FieldWidget for NumberWidget {
 
     fn is_readonly(&self) -> bool {
         false
+    }
+
+    fn event_mouse(
+        &mut self,
+        col: u16,
+        _row: u16,
+        inner: Rect,
+        _keys: &KeyConfig,
+    ) -> Result<EventState> {
+        // ‹ is the first character, › is the last.
+        if col <= inner.x + 1 {
+            self.set_clamped(self.value.saturating_sub(1));
+        } else if col >= inner.x + inner.width.saturating_sub(1) {
+            self.set_clamped(self.value.saturating_add(1));
+        } else {
+            // Click on the value body: same as move_right.
+            self.set_clamped(self.value.saturating_add(1));
+        }
+        Ok(EventState::Consumed)
     }
 }

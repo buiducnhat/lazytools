@@ -4,7 +4,8 @@ use std::time::Duration;
 use anyhow::Result;
 use lazytools_core::registry::Registry;
 use ratatui::crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyEventKind,
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    Event, KeyEventKind, MouseEventKind,
 };
 use ratatui::crossterm::execute;
 
@@ -28,9 +29,11 @@ fn run_with(mut app: App) -> Result<()> {
     // `ratatui::init()` already installs a panic hook that restores the terminal.
     let mut terminal = ratatui::init();
     execute!(stdout(), EnableBracketedPaste)?;
+    execute!(stdout(), EnableMouseCapture)?;
 
     let result = run_loop(&mut terminal, &mut app);
 
+    let _ = execute!(stdout(), DisableMouseCapture);
     let _ = execute!(stdout(), DisableBracketedPaste);
     ratatui::restore();
 
@@ -62,7 +65,13 @@ fn run_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()
         if event::poll(TICK)? {
             let ev = event::read()?;
             // Windows sends both Press and Release; only handle Press to avoid duplicates.
-            let skip = matches!(&ev, Event::Key(k) if k.kind != KeyEventKind::Press);
+            // Mouse moves are filtered to avoid redrawing on every pixel of cursor motion
+            // — same rationale: nothing changes state, so the work is pure waste.
+            let skip = match &ev {
+                Event::Key(k) => k.kind != KeyEventKind::Press,
+                Event::Mouse(m) => matches!(m.kind, MouseEventKind::Moved),
+                _ => false,
+            };
             if !skip {
                 app.event(&ev)?;
             }

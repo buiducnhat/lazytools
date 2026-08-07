@@ -6,16 +6,16 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::Frame;
-use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Paragraph};
 
-use crate::components::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState};
+use crate::components::{CommandBlocking, CommandInfo, Component, DrawableComponent, EventState, LastArea};
 use crate::keys::{KeyConfig, key_match};
 use crate::queue::{InternalEvent, Queue};
-use crate::ui::{SharedTheme, centered_rect};
+use crate::ui::{inside, SharedTheme, centered_rect};
 
 /// Loading a large file into `TextArea` would make the TUI unusable. P2's 256KB
 /// threshold only downgrades to `OnDemand` rather than solving the render cost,
@@ -53,6 +53,8 @@ pub struct FileOpenPopup {
     queue: Queue,
     theme: SharedTheme,
     key_config: KeyConfig,
+    /// Published for the App-level outside-click guard.
+    last_area: LastArea,
 }
 
 impl FileOpenPopup {
@@ -67,6 +69,7 @@ impl FileOpenPopup {
             queue,
             theme,
             key_config,
+            last_area: LastArea::default(),
         };
         popup.reload();
         popup
@@ -163,6 +166,7 @@ impl DrawableComponent for FileOpenPopup {
             return Ok(());
         }
         let area = centered_rect(70, 70, rect);
+        self.last_area.set(area);
         f.render_widget(Clear, area);
 
         let block = Block::bordered()
@@ -246,6 +250,41 @@ impl Component for FileOpenPopup {
         if !self.visible {
             return Ok(EventState::NotConsumed);
         }
+
+        if let Event::Mouse(m) = ev {
+            let area = self.last_area.get();
+            if !inside(area, m.column, m.row) {
+                return Ok(EventState::Consumed);
+            }
+            // Recompute the inner layout exactly as `draw` does.
+            let block = Block::bordered();
+            let inner = block.inner(area);
+            let rows = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(1),
+                    Constraint::Min(1),
+                    Constraint::Length(1),
+                ])
+                .split(inner);
+            let Event::Mouse(m) = ev else { unreachable!() };
+            match m.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    if m.row >= rows[1].y && m.row < rows[1].y + rows[1].height {
+                        let idx = (m.row - rows[1].y) as usize;
+                        if idx < self.entries.len() {
+                            self.selected = idx;
+                            self.activate();
+                        }
+                    }
+                }
+                MouseEventKind::ScrollUp => self.move_selection(-1),
+                MouseEventKind::ScrollDown => self.move_selection(1),
+                _ => {}
+            }
+            return Ok(EventState::Consumed);
+        }
+
         let Event::Key(k) = ev else {
             return Ok(EventState::Consumed);
         };

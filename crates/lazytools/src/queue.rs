@@ -7,14 +7,13 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use bitflags::bitflags;
-use lazytools_core::ToolError;
 
 #[derive(Debug)]
 pub enum InternalEvent {
     SelectTool(&'static str),
     /// An input's value changed → schedule a debounced tool re-run.
     InputChanged,
-    /// `RunMode::OnDemand` was triggered via a key press.
+    /// `RunMode::OnDemand` was triggered via a key press or status-badge click.
     RunRequested,
     OpenPalette,
     ClosePalette,
@@ -33,7 +32,11 @@ pub enum InternalEvent {
     /// Opens the save popup for the currently focused output value.
     SaveOutput(String),
     ShowMsg(String),
-    ShowError(ToolError),
+    /// Move input focus to a specific pane. Mouse clicks on the sidebar push
+    /// `FocusPane(Sidebar)`; clicks on the tool form push `FocusPane(Workspace)`.
+    /// This keeps the focus-routing knowledge inside App rather than handing
+    /// components a back-channel.
+    FocusPane(crate::app::Focus),
     Quit,
 }
 

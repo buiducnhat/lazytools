@@ -3,7 +3,7 @@ use std::rc::Rc;
 use anyhow::Result;
 use lazytools_core::registry::{Registry, Tool};
 use ratatui::Frame;
-use ratatui::crossterm::event::Event;
+use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::widgets::Block;
 
@@ -28,7 +28,7 @@ const BREAKPOINT_NARROW: u16 = 80;
 const BREAKPOINT_HIDE: u16 = 60;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Focus {
+pub enum Focus {
     Sidebar,
     Workspace,
 }
@@ -377,6 +377,18 @@ impl App {
             return Ok(());
         }
 
+        // Outside-popup click guard. After the inner pump returns `NotConsumed`,
+        // a click that didn't land inside any visible popup must still dismiss the
+        // topmost one. Without this, a click outside every popup falls through to
+        // the underlying pane — wrong when the user just wanted to dismiss the popup.
+        // Wheel events deliberately skip this path: a wheel that misses every scrollable
+        // target is just a stray scroll, not a dismissal.
+        if let Event::Mouse(m) = ev
+            && matches!(m.kind, MouseEventKind::Down(MouseButton::Left))
+        {
+            self.close_top_most_visible_popup();
+        }
+
         if let Event::Key(k) = ev {
             let keys = &self.key_config.keys;
             if key_match(k, keys.palette) {
@@ -424,6 +436,29 @@ impl App {
         self.tool_form.set_focused(self.focus == Focus::Workspace);
     }
 
+    /// Hides the topmost visible popup — `msg_popup` is checked first because it
+    /// draws last (top of the stack), then `theme_popup`, `file_save`, `file_open`,
+    /// `help_popup`, `palette`. No-op when no popup is visible.
+    ///
+    /// Used by the outside-click guard in `event`.
+    /// The msg popup is checked first because it draws at the very top of the stack —
+    /// a config error has to win over every other popup so the user can always read it.
+    fn close_top_most_visible_popup(&mut self) {
+        if self.msg_popup.is_visible() {
+            self.msg_popup.hide();
+        } else if self.theme_popup.is_visible() {
+            self.theme_popup.hide();
+        } else if self.file_save.is_visible() {
+            self.file_save.hide();
+        } else if self.file_open.is_visible() {
+            self.file_open.hide();
+        } else if self.help_popup.is_visible() {
+            self.help_popup.hide();
+        } else if self.palette.is_visible() {
+            self.palette.hide();
+        }
+    }
+
     /// Drains the queue. Returns flags indicating what needs updating.
     pub fn process_queue(&mut self) -> Result<NeedsUpdate> {
         let mut flags = NeedsUpdate::empty();
@@ -450,10 +485,6 @@ impl App {
                 }
                 InternalEvent::ShowMsg(m) => {
                     self.msg_popup.show_msg(m);
-                    flags |= NeedsUpdate::ALL;
-                }
-                InternalEvent::ShowError(e) => {
-                    self.msg_popup.show_error(e.to_string());
                     flags |= NeedsUpdate::ALL;
                 }
                 InternalEvent::OpenPalette => {
@@ -509,6 +540,10 @@ impl App {
                     flags |= NeedsUpdate::ALL;
                 }
                 InternalEvent::Quit => self.should_quit = true,
+                InternalEvent::FocusPane(focus) => {
+                    self.set_focus(focus);
+                    flags |= NeedsUpdate::COMMANDS;
+                }
             }
         }
         Ok(flags)

@@ -13,7 +13,7 @@ homepage = "https://github.com/buiducnhat/lazytools"
 [workspace.dependencies]
 # `version` is required alongside `path`: crates.io rejects a bare path dependency.
 # Cargo builds locally from the path and publishes the version.
-lazytools-core = { path = "crates/lazytools-core", version = "0.5.0" }
+lazytools-core = { path = "crates/lazytools-core", version = "0.5.1" }
 
 thiserror = "2.0"
 md-5 = "0.11"

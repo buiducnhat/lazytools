@@ -2,7 +2,7 @@
 
 # lazytools
 
-A terminal utility belt — offline, keyboard-first. Like
+A terminal utility belt — offline, keyboard-first, mouse-friendly. Like
 [it-tools](https://github.com/CorentinTh/it-tools) but as a TUI, while also
 working directly in shell pipelines.
 
